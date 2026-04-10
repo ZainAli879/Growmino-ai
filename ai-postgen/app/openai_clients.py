@@ -322,7 +322,16 @@ def generate_image(payload: GenerateRequest, settings: Settings, caption: str, h
     text_provider, text_model, text_base_url, text_default_headers = _text_generation_client_config(settings)
     has_logo = bool((payload.company_logo_url or "").strip())
     logo_mode = (settings.logo_input_mode or "overlay").strip().lower()
+    supports_reference_logo = settings.image_provider in {"openrouter", "infip"}
+    use_reference_logo = has_logo and logo_mode in {"reference", "both"} and supports_reference_logo
     use_overlay_logo = has_logo and logo_mode in {"overlay", "both"}
+    if has_logo and logo_mode == "reference" and not supports_reference_logo:
+        # Provider path currently does not accept image-input wiring in this flow.
+        # Fall back to overlay to guarantee brand mark appears.
+        use_overlay_logo = True
+    logo_bytes: bytes | None = None
+    if has_logo:
+        logo_bytes = _load_logo_bytes(payload.company_logo_url, settings.request_timeout_seconds)
 
     prompt = generate_image_prompt_from_caption(
         caption=caption,
@@ -332,6 +341,10 @@ def generate_image(payload: GenerateRequest, settings: Settings, caption: str, h
         base_url=text_base_url,
         default_headers=text_default_headers,
     ).strip()
+    prompt = (
+        f"{prompt}\nMandatory text rule: render this exact headline text only, with identical wording and spelling: \"{headline}\"."
+        "\nDo not paraphrase, truncate, add words, or alter punctuation."
+    )
 
     # Keep prompt simple and natural (no over-constraining).
     if use_overlay_logo:
@@ -360,10 +373,17 @@ def generate_image(payload: GenerateRequest, settings: Settings, caption: str, h
     elif settings.image_provider == "openrouter":
         endpoint = f"{settings.openrouter_base_url}/chat/completions"
         headers = _openrouter_headers(settings)
+        user_content: object = prompt
+        if use_reference_logo and logo_bytes is not None:
+            data_url = f"data:image/png;base64,{base64.b64encode(logo_bytes).decode('ascii')}"
+            user_content = [
+                {"type": "text", "text": prompt},
+                {"type": "image_url", "image_url": {"url": data_url}},
+            ]
         body = {
             "model": settings.openrouter_image_model,
             "messages": [
-                {"role": "user", "content": prompt},
+                {"role": "user", "content": user_content},
             ],
             "modalities": ["image"],
             "stream": False,
@@ -382,11 +402,17 @@ def generate_image(payload: GenerateRequest, settings: Settings, caption: str, h
         }
         provider_label = settings.openai_image_model
     else:
-        endpoint = f"{settings.infip_base_url}/images/generations"
-        headers = {
-            "Authorization": f"Bearer {settings.infip_api_key}",
-            "Content-Type": "application/json",
-        }
+        if use_reference_logo and logo_bytes is not None:
+            endpoint = f"{settings.infip_base_url}/images/edits"
+            headers = {
+                "Authorization": f"Bearer {settings.infip_api_key}",
+            }
+        else:
+            endpoint = f"{settings.infip_base_url}/images/generations"
+            headers = {
+                "Authorization": f"Bearer {settings.infip_api_key}",
+                "Content-Type": "application/json",
+            }
         body = {
             "model": settings.infip_image_model,
             "prompt": prompt,
@@ -408,18 +434,30 @@ def generate_image(payload: GenerateRequest, settings: Settings, caption: str, h
         return (resp.text or "").strip()[:300]
 
     try:
-        response = requests.post(endpoint, headers=headers, json=body, timeout=settings.request_timeout_seconds)
+        def _post_current(request_body: dict):
+            if settings.image_provider == "infip" and use_reference_logo and logo_bytes is not None:
+                return requests.post(
+                    endpoint,
+                    headers=headers,
+                    data=request_body,
+                    files={"image": ("logo.png", logo_bytes, "image/png")},
+                    timeout=settings.request_timeout_seconds,
+                )
+            return requests.post(endpoint, headers=headers, json=request_body, timeout=settings.request_timeout_seconds)
+
+        response = _post_current(body)
 
         if (
             not response.ok
             and settings.image_provider == "infip"
+            and not use_reference_logo
             and response.status_code == 403
             and "pro" in _extract_error_detail(response).lower()
             and body.get("model") != "img4"
         ):
             body["model"] = "img4"
             provider_label = "img4"
-            response = requests.post(endpoint, headers=headers, json=body, timeout=settings.request_timeout_seconds)
+            response = _post_current(body)
 
         if (
             not response.ok
@@ -431,7 +469,7 @@ def generate_image(payload: GenerateRequest, settings: Settings, caption: str, h
         ):
             body["size"] = "1024x1024"
             used_size = "1024x1024"
-            response = requests.post(endpoint, headers=headers, json=body, timeout=settings.request_timeout_seconds)
+            response = _post_current(body)
 
         if not response.ok:
             raise RuntimeError(
@@ -465,11 +503,9 @@ def generate_image(payload: GenerateRequest, settings: Settings, caption: str, h
     if not image_bytes:
         raise RuntimeError(f"Image response did not include an image payload [{settings.image_provider}].")
 
-    if settings.headline_overlay_enabled and headline.strip():
-        image_bytes = _overlay_headline(image_bytes, headline.strip())
+    # User-selected mode: rely on model-rendered headline text (no post-generation headline overlay).
 
-    if use_overlay_logo:
-        logo_bytes = _load_logo_bytes(payload.company_logo_url, settings.request_timeout_seconds)
+    if use_overlay_logo and logo_bytes is not None:
         image_bytes = _overlay_logo(image_bytes, logo_bytes)
 
     with open(file_path, "wb") as f:

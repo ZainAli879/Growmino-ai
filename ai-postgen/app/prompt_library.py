@@ -164,9 +164,31 @@ Caption:
 Prompt requirements:
 - Keep only concrete visual requirements. No fluff adjectives.
 - Include subject, scene, composition, style, lighting, and color direction.
-- No visible text in scene.
-- No logos or brand marks in scene.
-- No watermark or signature.
+- Render exactly one headline text line and it must match this text exactly: "{headline}".
+- Use this required text layout style: "{text_layout_style}".
+- Do not add any extra text, labels, UI words, logos, or watermarks.
+- Preserve exact spelling and wording for the headline text.
+- Treat the headline as premium art direction, not placeholder text.
+- Make typography bold, intentional, and contemporary (2026 social creative quality).
+- Use one unique overlay treatment only (choose one and execute cleanly):
+  - editorial ribbon
+  - frosted glass strip
+  - cutout geometric block
+  - split-color bar
+  - lower-third broadcast lockup
+  - minimal gradient underlay
+  - shadow-only high-contrast type
+- Keep hierarchy clean: single focal headline, no secondary copy.
+- Ensure strong readability on mobile: high contrast, generous spacing, safe margins.
+- Keep overlay visually integrated with the image mood and brand palette.
+- Derive visual concept directly from the caption's core message, pain point, offer, and desired outcome.
+- Choose a scene that feels specific to the business context, not generic stock composition.
+- Use realistic human activity, authentic environments, and believable props that support the message.
+- Prioritize narrative clarity: at first glance, viewer should understand the problem and transformation angle.
+- Vary camera framing naturally across outputs (close-up, mid-shot, wide) based on the concept.
+- Keep realism high: natural proportions, coherent perspective, consistent lighting, plausible materials.
+- Favor modern 2026 commercial aesthetics: polished but human, premium but practical, conversion-focused.
+- Use contemporary art direction: clean depth, intentional color contrast, subtle cinematic grading, no visual clutter.
 - Align background and visual metaphors to the post value and pain point context.
 - Visual direction should feel current (2026 social creative): clean, high-contrast, premium, and mobile-first.
 - Do not output placeholder tokens (for example EXACT_TEXT, HEADLINE_TEXT, or TEMPLATE_TEXT).

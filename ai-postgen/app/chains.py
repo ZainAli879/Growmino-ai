@@ -305,6 +305,7 @@ def generate_image_prompt_from_caption(
     default_headers: dict[str, str] | None = None,
 ) -> str:
     safe_headline = _normalize_text(headline, max_words=10) or "Business Growth"
+    selected_layout = _next_image_text_layout()
     chain = _build_image_prompt_chain(
         model_name=model_name,
         api_key=api_key,
@@ -315,6 +316,7 @@ def generate_image_prompt_from_caption(
         {
             "caption": caption,
             "headline": safe_headline,
+            "text_layout_style": selected_layout,
         }
     ).strip()
     return prompt
