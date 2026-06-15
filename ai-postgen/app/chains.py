@@ -40,6 +40,7 @@ def _build_chain(
         "model": model_name,
         "temperature": temperature,
         "api_key": api_key,
+        "request_timeout": 30,
         "model_kwargs": {"response_format": {"type": "json_object"}},
     }
     if base_url:
@@ -58,7 +59,12 @@ def _build_image_prompt_chain(
     base_url: str | None = None,
     default_headers: dict[str, str] | None = None,
 ):
-    kwargs: dict[str, Any] = {"model": model_name, "temperature": 0.2, "api_key": api_key}
+    kwargs: dict[str, Any] = {
+        "model": model_name, 
+        "temperature": 0.2, 
+        "api_key": api_key,
+        "request_timeout": 30,
+    }
     if base_url:
         kwargs["base_url"] = base_url
     if default_headers:
@@ -258,6 +264,7 @@ Headlines must pass these strict rules:
         "model": model_name,
         "temperature": 0.2,
         "api_key": api_key,
+        "request_timeout": 30,
     }
     if base_url:
         retry_kwargs["base_url"] = base_url

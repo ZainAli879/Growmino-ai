@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 from app.schemas import ContentTypeEnum, DayEnum, PlatformEnum
 
@@ -14,52 +14,52 @@ DAY_CONTENT_MAPPING: dict[DayEnum, ContentTypeEnum] = {
 
 PLATFORM_RULES: dict[PlatformEnum, str] = {
     PlatformEnum.linkedin: """
-You are writing for LinkedIn.
-- 80-180 words (target 110-160).
-- Strong hook in first 1-2 lines.
-- Professional but conversational.
-- Line breaks for mobile readability.
-- Optional bullets: max 3-6 short bullets.
-- 0-3 emojis max.
-- Include one actionable takeaway (tip, step, or mini-framework).
-- Avoid ad-like phrasing such as "shop now", "best ever", or hype claims.
-- Add 3-6 relevant non-spammy hashtags at the end.
+You are writing for LinkedIn in 2026.
+- 80-200 words (target 120-180).
+- Scroll-stopping pattern-interrupt hook in first line.
+- Creator-led, hyper-authentic, 'zero-click' value (no external links needed to get value).
+- Use single-sentence paragraphs and generous line breaks for mobile skimming.
+- Use a bold statement or contrarian take.
+- 0-2 emojis max (keep it minimalist).
+- Conclude with a high-converting, low-friction CTA.
+- Add 3-5 hyper-niche hashtags at the end.
 """.strip(),
     PlatformEnum.instagram: """
-You are writing for Instagram.
-- 60-140 words (target 80-120).
-- Punchy relatable hook.
-- 1-2 emojis per paragraph max.
-- Add 5-10 relevant non-spammy hashtags at the end.
-- Keep tone human and specific; avoid generic promotional copy.
+You are writing for Instagram (Feed/Carousel) in 2026.
+- 60-150 words (target 80-120).
+- Visual-first storytelling: hook them with text that perfectly complements the image.
+- Raw, authentic, and aesthetic "photo-dump" or "carousel" vibe.
+- 2-3 trendy emojis max.
+- Add 4-7 relevant hashtags integrated seamlessly or at the end.
+- Keep tone conversational, human, and community-driven. Avoid sterile corporate copy.
 """.strip(),
     PlatformEnum.facebook: """
-You are writing for Facebook.
+You are writing for Facebook in 2026.
 - 60-140 words.
-- Friendly and direct tone.
+- Community-focused, highly relatable, story-driven tone.
 - Minimal emojis.
-- Keep it practical and clear, not overly salesy.
-- Add 3-6 relevant non-spammy hashtags at the end.
+- highly practical, zero fluff. Focus on relatable pain points.
+- Add 3-5 relevant hashtags at the end.
 """.strip(),
 }
 
 CONTENT_TYPE_RULES: dict[ContentTypeEnum, str] = {
-    ContentTypeEnum.educational: "Provide a quick 3-step framework with practical actions.",
-    ContentTypeEnum.educational_carousel_post: "Write as a carousel-style sequence with 3 concise learning points.",
-    ContentTypeEnum.educational_post_infographic: "Teach with concise, data-friendly points suitable for an infographic-style visual.",
-    ContentTypeEnum.pain_point: "Validate the pain point and provide 2 practical fixes.",
-    ContentTypeEnum.case_study: "Use a story format. Do not invent proof. If missing, include '(client proof needed)'.",
-    ContentTypeEnum.case_study_post: "Use a story format with concrete before/after framing. Do not invent proof. If missing, include '(client proof needed)'.",
-    ContentTypeEnum.industry_insight: "Share a trend observation and what to do next.",
-    ContentTypeEnum.founder_authority: "Use first-person lesson and one practical takeaway.",
-    ContentTypeEnum.authority_post_tips_post: "Share authority-building practical tips with one clear action the reader can apply today.",
-    ContentTypeEnum.automation_tip: "Provide a practical 3-step automation tip framework.",
-    ContentTypeEnum.client_testimonial: "Use testimonial-style story. No invented proof. If missing, include '(client proof needed)'.",
-    ContentTypeEnum.testimonial_post: "Use testimonial-style story. No invented proof. If missing, include '(client proof needed)'.",
+    ContentTypeEnum.educational: "Deliver an ultra-specific, high-value micro-lesson. Focus on 'how' not just 'what'.",
+    ContentTypeEnum.educational_carousel_post: "Structure as a high-retention carousel: Hook -> Concept -> 3 Steps -> Result -> CTA.",
+    ContentTypeEnum.educational_post_infographic: "Design for 'saveable' content. Bullet-point deep value that users will want to screenshot.",
+    ContentTypeEnum.pain_point: "Agitate a specific hyper-niche pain point, then offer a counter-intuitive, modern 2026 solution.",
+    ContentTypeEnum.case_study: "Use a 'Hero's Journey' micro-story format. Emphasize the transformation. If missing, limit to '(client proof needed)'.",
+    ContentTypeEnum.case_study_post: "Fast-paced Before/After story frame. Focus on exact metrics or emotional shift. If missing, use '(client proof needed)'.",
+    ContentTypeEnum.industry_insight: "Share a bold prediction or tear-down of a current 2026 trend. Back it up with a unique perspective.",
+    ContentTypeEnum.founder_authority: "Share a vulnerable, behind-the-scenes founder lesson. 'Build-in-public' raw transparency.",
+    ContentTypeEnum.authority_post_tips_post: "High-signal, low-noise actionable tips. Speak like an absolute master of the craft.",
+    ContentTypeEnum.automation_tip: "Provide a 'plug-and-play' AI/automation workflow. Name the tools and the exact trigger/action.",
+    ContentTypeEnum.client_testimonial: "Frame the testimonial as an unboxing or raw reaction. No hype, just real results. '(client proof needed)' if empty.",
+    ContentTypeEnum.testimonial_post: "Focus on the emotional relief the client felt. Use exact quotes if possible. '(client proof needed)' if empty.",
 }
 
 CAPTION_TEMPLATE = """
-You are an expert social media copywriter.
+You are an elite, top-tier social media copywriter in 2026, creating native, algorithm-friendly content.
 Create one finalized caption and one headline/hook.
 Output strict JSON only. No markdown fences.
 
@@ -80,18 +80,17 @@ Business context:
 - Recent headlines to avoid repeating: {recent_headlines}
 
 Mandatory structure:
-1) Hook (1-2 lines). Use one pattern: question, contrarian, "If you're doing X, you're losing Y", or micro-story opener.
-2) Value (2-5 short lines) based on content type requirements.
+1) Hook: First sentence must instantly command attention (use curiosity gap, contrarian truth, or direct call-out).
+2) Value/Body: Short, punchy sentences. High signal-to-noise ratio. Deliver the promise of the hook.
 3) Optional micro-credibility line only when proof assets exist.
-4) One clear CTA line in the final 1-2 lines. Use CTA preference when provided.
+4) CTA: One clear, frictionless next step for the reader.
 
 Global constraints:
-- Clear, practical, human.
-- No buzzword soup.
-- No long paragraphs.
-- No fabricated metrics, client names, testimonials, or results.
+- Use modern 2026 pacing: rhythmic, easy to skim, zero fluff.
+- No outdated marketing speak ("synergy", "innovative", "shop now").
+- No fabricated metrics, client names, or testimonials.
 - If proof assets are empty and content type needs proof, include '(client proof needed)'.
-- Avoid unsafe content (hate, harassment, sexual content, violence, illegal instructions, medical/legal guarantees).
+- Avoid unsafe/prohibited content.
 
 Platform rules:
 {platform_rules}
@@ -100,97 +99,73 @@ Content-type rules:
 {content_type_rules}
 
 Formatting requirements:
-- Use short lines with clean line breaks for readability.
-- Keep one clear CTA near the end of caption.
-- Always include hashtags in the final line(s):
-  - LinkedIn/Facebook: 3-6 relevant hashtags
-  - Instagram: 5-10 relevant hashtags
-- Mention one concrete audience pain point and one practical fix or next step.
-- Avoid generic claims and filler lines.
-- Headline must be fresh and distinct from recent headlines. Avoid repeating wording patterns.
+- Use short sentences. Maximum 2 sentences per paragraph.
+- Add white space (line breaks) for high readability on mobile.
+- Always include hashtags (as per platform rules).
+- Connect the pain point directly to the practical fix.
+- Headline must completely differentiate from recent headlines.
 
 Output JSON with exactly these keys:
 - "caption": full post caption text
-- "headline": one short hook/headline aligned with the caption.
+- "headline": one ultra-short hook/headline designed to be overlaid on an image.
+
 Headline quality rules:
-- 4-8 words only.
-- Title Case (except small connector words).
-- No hashtags, no emojis, no quotation marks, no trailing punctuation.
-- Plain ASCII only (letters, digits, spaces, hyphen, apostrophe).
-- Must be easy to read on image overlay in under 2 seconds.
+- 3-7 words ONLY. Hyper-concise.
+- Title Case for major words.
+- No hashtags, emojis, or trailing punctuation.
+- Must be instantly readable in under 1 second when overlaid on graphic.
 """.strip()
 
-NEGATIVE_IMAGE_PROMPT = "no watermark, no signature, no brand names, no UI mockups, no cluttered layout, no blur, no artifacts"
+NEGATIVE_IMAGE_PROMPT = "boring stock photo, generic corporate, 2010s aesthetic, flat lighting, artificial CGI look, AI artifacts, plastic skin, cluttered UI, messy text, watermarks, signature, cheesy models, low resolution, bad anatomy, overused marketing templates"
 
 IMAGE_TEXT_LAYOUT_OPTIONS: list[str] = [
-    "top ribbon with high contrast",
-    "bottom ribbon with high contrast",
-    "top full-width solid ribbon with strong contrast",
-    "bottom full-width solid ribbon with strong contrast",
-    "top gradient ribbon with soft edge shadow",
-    "bottom gradient ribbon with soft edge shadow",
-    "top translucent ribbon with bold high-contrast text",
-    "bottom translucent ribbon with bold high-contrast text",
-    "top split-color ribbon with punchy contrast",
-    "bottom split-color ribbon with punchy contrast",
-    "ticker-style lower-third bar with bold headline lockup",
-    "cinematic letterbox bars with headline inside lower bar",
-    "angled full-width sash with horizontal headline",
-    "offset headline band starting at 20 percent width",
-    "highlight strip behind key words only with strong contrast",
-    "top ribbon with subtle neon edge glow",
-    "bottom ribbon with subtle neon edge glow",
-    "top ribbon with minimal pattern texture and strong contrast",
-    "bottom ribbon with minimal pattern texture and strong contrast",
-    "top left anchored ribbon with asymmetric cut edge",
-    "bottom right anchored ribbon with asymmetric cut edge",
-    "floating center ribbon with high-contrast border",
-    "top stepped ribbon with layered depth and clear headline",
-    "bottom stepped ribbon with layered depth and clear headline",
-    "top blueprint grid ribbon with strong contrast text",
-    "bottom blueprint grid ribbon with strong contrast text",
-    "top frosted ribbon with crisp dark text lockup",
-    "bottom frosted ribbon with crisp light text lockup",
-    "center horizon ribbon across middle third with bold headline",
+    "hyper-legible brutalist typography overlapping abstract 3D elements",
+    "sleek semi-transparent dark-glass visor overlay with crisp white type",
+    "fluid morphing typography deeply integrated into environmental shadows",
+    "high-end editorial crop with floating oversized sans-serif letters",
+    "minimalist Japanese magazine layout using vertical and horizontal text interplay",
+    "cyber-chic glitch-art text frames with chromatic aberration",
+    "elegant Bauhaus-inspired geometric text containment with striking primary colors",
+    "translucent holographic badge with embossed chrome-finish lettering",
+    "clean micro-typography style pushing the headline into deliberate negative space",
+    "layered collage aesthetic masking text underneath textured paper edges",
+    "bold anti-design layout using clashing hyper-saturated text blocks",
+    "ultra-clean corporate tech lockup with a glowing neon accent underline",
+    "cinematic golden-hour light illuminating embossed text naturally tracked into the scene",
+    "monolithic metallic bold letters resting directly on surfaces in the scene",
+    "minimal tech-HUD overlay with sharp monospaced data-driven typography",
+    "editorial fashion-style ultra-thin serif type cascading over soft gradients"
 ]
 
 IMAGE_PROMPT_FROM_CAPTION_TEMPLATE = """
-You convert a social caption into a production-ready image generation prompt.
+You convert a social caption into a production-ready, highly artistic image generation prompt for a cutting-edge 2026 AI image model (like Midjourney v6).
 Output exactly ONE plain-text prompt only. No markdown. No labels. No explanations.
 
 Caption:
 {caption}
 
 Prompt requirements:
-- Keep only concrete visual requirements. No fluff adjectives.
-- Include subject, scene, composition, style, lighting, and color direction.
-- Render exactly one headline text line and it must match this text exactly: "{headline}".
-- Use this required text layout style: "{text_layout_style}".
-- Do not add any extra text, labels, UI words, logos, or watermarks.
-- Preserve exact spelling and wording for the headline text.
-- Treat the headline as premium art direction, not placeholder text.
-- Make typography bold, intentional, and contemporary (2026 social creative quality).
-- Use one unique overlay treatment only (choose one and execute cleanly):
-  - editorial ribbon
-  - frosted glass strip
-  - cutout geometric block
-  - split-color bar
-  - lower-third broadcast lockup
-  - minimal gradient underlay
-  - shadow-only high-contrast type
-- Keep hierarchy clean: single focal headline, no secondary copy.
-- Ensure strong readability on mobile: high contrast, generous spacing, safe margins.
-- Keep overlay visually integrated with the image mood and brand palette.
-- Derive visual concept directly from the caption's core message, pain point, offer, and desired outcome.
-- Choose a scene that feels specific to the business context, not generic stock composition.
-- Use realistic human activity, authentic environments, and believable props that support the message.
-- Prioritize narrative clarity: at first glance, viewer should understand the problem and transformation angle.
-- Vary camera framing naturally across outputs (close-up, mid-shot, wide) based on the concept.
-- Keep realism high: natural proportions, coherent perspective, consistent lighting, plausible materials.
-- Favor modern 2026 commercial aesthetics: polished but human, premium but practical, conversion-focused.
-- Use contemporary art direction: clean depth, intentional color contrast, subtle cinematic grading, no visual clutter.
-- Align background and visual metaphors to the post value and pain point context.
-- Visual direction should feel current (2026 social creative): clean, high-contrast, premium, and mobile-first.
-- Do not output placeholder tokens (for example EXACT_TEXT, HEADLINE_TEXT, or TEMPLATE_TEXT).
-- Keep prompt compact and directly usable by an image model.
+- Generate an extremely detailed, hyper-realistic, or highly stylized 2026 trending aesthetic prompt.
+- The background MUST be highly relevant and directly connected to the caption's core message and context - not generic or unrelated scenes.
+- Incorporate specific camera angles, cinematic lighting, and lens descriptions (e.g., "shot on 35mm lens, depth of field, volumetric lighting, rim light").
+- Render exactly ONE headline text line. It MUST exactly match this text: "{headline}". The text should be displayed as a clean graphic overlay element as a semi-transparent box or banner - NOT as 3D text embedded into buildings, signs, or scene objects. The text must be a floating overlay that sits ON TOP of the image.
+- The text should be displayed as a single continuous line without breaking into multiple stacked lines and positioned in a clearly visible location such as top, bottom or side areas of the image.
+- Use this specific 2026 text layout/UI style: "{text_layout_style}".
+- Always include the company/brand logo positioned in the TOP RIGHT CORNER of the image - separate and independent from any text overlays or boxes, positioned directly on the image without a background container.
+- The logo MUST appear ONLY in the TOP RIGHT CORNER - do NOT place the logo anywhere else in the image, in backgrounds, on scene objects, or repeated elsewhere. One logo placement only.
+- The logo color MUST remain unchanged in all conditions. Only minimal border refinement or edge adjustments are allowed to enhance presentation.
+- For branding consistency, the headline text color and any overlay background should match or harmonize with the logo's primary colors.
+- The logo and headline text are SEPARATE elements - do NOT group them together in the same overlay or box. The logo stays in the top right corner on its own.
+- Do NOT add any other extra text, UI elements, or watermarks beyond the required logo.
+- The typography must be bold, hyper-modern, and naturally integrated as an overlay.
+- Create an image that feels like premium, top-tier agency creative work--not a cheap stock photo.
+- Instead of literal interpretations, use powerful visual metaphors or highly aesthetic lifestyle imagery that connects emotionally to the caption's value and directly reflects the caption's meaning.
+- Emphasize rich textures, dynamic color grading, and high-end commercial art direction.
+- Keep the composition balanced to allow the "{text_layout_style}" overlay to stand out clearly against the background.
+- Ensure the scene is authentic, raw, and high-converting (UGC-style realness combined with editorial polish).
+- Include camera modifiers like "8k resolution, photorealistic, highly detailed, octane render, Unreal Engine 5 aesthetic, editorial fashion photography" depending on what fits the brand tone best.
+- Vary the perspective (drone shot, extreme close-up, dynamic low angle, eye-level intimate portrait) based on the emotional core of the caption.
+- Do not output placeholder tokens.
+
+Return only the final image generation prompt.
 """.strip()

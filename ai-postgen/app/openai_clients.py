@@ -263,7 +263,7 @@ def _overlay_logo(image_bytes: bytes, logo_bytes: bytes) -> bytes:
         logo = logo.resize((new_w, new_h), Image.Resampling.LANCZOS)
 
         margin = max(18, int(base_w * 0.04))
-        x = margin
+        x = base_w - logo.width - margin
         y = margin
 
         base.alpha_composite(logo, dest=(x, y))
