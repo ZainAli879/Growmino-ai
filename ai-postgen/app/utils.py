@@ -4,6 +4,7 @@ import os
 import re
 import json
 from datetime import datetime
+from pathlib import Path
 
 from app.prompt_library import NEGATIVE_IMAGE_PROMPT
 from app.schemas import ContentTypeEnum
@@ -52,6 +53,20 @@ def build_output_file_path(outputs_dir: str, platform: str, day: str, content_ty
         f"{sanitize_filename_part(content_type)}.png"
     )
     return os.path.join(outputs_dir, filename)
+
+
+def build_public_output_url(file_path: str) -> str:
+    normalized = str(file_path).replace("\\", "/")
+    marker = "/outputs/"
+    if marker in normalized:
+        return normalized.split(marker, 1)[1]
+
+    path = Path(normalized)
+    parts = [part for part in path.parts if part not in {"."}]
+    if "outputs" in parts:
+        index = parts.index("outputs")
+        return "/".join(parts[index + 1 :])
+    return path.name
 
 
 def select_image_style(content_type: ContentTypeEnum) -> str:

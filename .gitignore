@@ -43,6 +43,7 @@ outputs/
 *.log
 *.tmp
 *.bak
+node_modules/
 
 # Jupyter
 .ipynb_checkpoints/

@@ -36,6 +36,11 @@ class PlatformEnum(str, Enum):
     facebook = "facebook"
 
 
+class PublishPlatformEnum(str, Enum):
+    instagram = "instagram"
+    facebook = "facebook"
+
+
 class GenerateRequest(BaseModel):
     business_name: str
     industry: str
@@ -94,6 +99,7 @@ class OpenAIImageInfo(BaseModel):
     prompt_used: str
     negative_prompt_used: str
     file_path: str
+    public_url: str = ""
     alt_text: str
 
 
@@ -128,6 +134,50 @@ class GenerateResponse(BaseModel):
     openai_image: OpenAIImageInfo
     qa: QAInfo | None = None
     trace: TraceInfo | None = None
+
+
+class PublishRequest(BaseModel):
+    platform: PublishPlatformEnum
+    caption: str
+    image_url: str = ""
+    image_file_path: str = ""
+    access_token: str = ""
+    facebook_page_id: str = ""
+    facebook_access_token: str = ""
+    instagram_business_account_id: str = ""
+    instagram_access_token: str = ""
+
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    @model_validator(mode="after")
+    def validate_payload(self) -> "PublishRequest":
+        if not self.caption.strip():
+            raise ValueError("caption is required and must be non-empty.")
+        if self.platform == PublishPlatformEnum.instagram and not (self.image_url.strip() or self.image_file_path.strip()):
+            raise ValueError("Instagram publishing requires image_url or image_file_path.")
+        return self
+
+
+class PublishResponse(BaseModel):
+    platform: PublishPlatformEnum
+    published: bool
+    post_id: str = ""
+    creation_id: str = ""
+    message: str = ""
+    image_url_used: str = ""
+    drive_image_url: str = ""
+
+
+class UploadImageResponse(BaseModel):
+    file_path: str
+    public_url: str
+
+
+class UploadImageRequest(BaseModel):
+    file_name: str = "upload.png"
+    data_url: str
+
+    model_config = ConfigDict(str_strip_whitespace=True)
 
 
 class ErrorResponse(BaseModel):

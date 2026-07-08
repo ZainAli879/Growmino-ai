@@ -53,6 +53,13 @@ class Settings:
     default_company_logo_path: str = ""
     logo_input_mode: str = "overlay"
     headline_overlay_enabled: bool = True
+    meta_graph_api_version: str = "v25.0"
+    meta_access_token: str = ""
+    facebook_page_id: str = ""
+    facebook_access_token: str = ""
+    instagram_business_account_id: str = ""
+    instagram_access_token: str = ""
+    cors_allow_origins: tuple[str, ...] = ("http://localhost:5173", "http://127.0.0.1:5173")
 
     def image_size_for_platform(self, platform: str) -> str:
         platform_key = (platform or "").strip().lower()
@@ -115,6 +122,7 @@ def get_settings() -> Settings:
     linkedin_image_size = os.getenv("LINKEDIN_IMAGE_SIZE", "1200x1200").strip() or "1200x1200"
     instagram_image_size = os.getenv("INSTAGRAM_IMAGE_SIZE", "1080x1350").strip() or "1080x1350"
     facebook_image_size = os.getenv("FACEBOOK_IMAGE_SIZE", "1200x630").strip() or "1200x630"
+    outputs_dir = os.getenv("OUTPUTS_DIR", "./outputs").strip() or "./outputs"
     traces_file = os.getenv("TRACES_FILE", "./outputs/traces/generation-traces.jsonl").strip() or "./outputs/traces/generation-traces.jsonl"
     google_credentials_json_path = os.getenv("GOOGLE_CREDENTIALS_JSON_PATH", "").strip()
     google_auth_mode = os.getenv("GOOGLE_AUTH_MODE", "service_account").strip().lower() or "service_account"
@@ -132,6 +140,14 @@ def get_settings() -> Settings:
     default_company_logo_path = os.getenv("DEFAULT_COMPANY_LOGO_PATH", "").strip()
     logo_input_mode = os.getenv("LOGO_INPUT_MODE", "overlay").strip().lower() or "overlay"
     headline_overlay_enabled = (os.getenv("HEADLINE_OVERLAY_ENABLED", "true").strip().lower() or "true") in {"1", "true", "yes", "on"}
+    meta_graph_api_version = os.getenv("META_GRAPH_API_VERSION", "v25.0").strip() or "v25.0"
+    meta_access_token = os.getenv("META_ACCESS_TOKEN", "").strip()
+    facebook_page_id = os.getenv("FACEBOOK_PAGE_ID", "").strip()
+    facebook_access_token = os.getenv("FACEBOOK_ACCESS_TOKEN", "").strip()
+    instagram_business_account_id = os.getenv("INSTAGRAM_BUSINESS_ACCOUNT_ID", "").strip()
+    instagram_access_token = os.getenv("INSTAGRAM_ACCESS_TOKEN", "").strip()
+    raw_cors_allow_origins = os.getenv("CORS_ALLOW_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173").strip()
+    cors_allow_origins = tuple(origin.strip() for origin in raw_cors_allow_origins.split(",") if origin.strip())
 
     if image_provider == "custom" and not custom_image_base_url:
         raise RuntimeError("CUSTOM_IMAGE_BASE_URL is missing. Add it to your environment or .env file.")
@@ -166,6 +182,7 @@ def get_settings() -> Settings:
         linkedin_image_size=linkedin_image_size,
         instagram_image_size=instagram_image_size,
         facebook_image_size=facebook_image_size,
+        outputs_dir=outputs_dir,
         traces_file=traces_file,
         google_credentials_json_path=google_credentials_json_path,
         google_auth_mode=google_auth_mode,
@@ -183,4 +200,11 @@ def get_settings() -> Settings:
         default_company_logo_path=default_company_logo_path,
         logo_input_mode=logo_input_mode,
         headline_overlay_enabled=headline_overlay_enabled,
+        meta_graph_api_version=meta_graph_api_version,
+        meta_access_token=meta_access_token,
+        facebook_page_id=facebook_page_id,
+        facebook_access_token=facebook_access_token,
+        instagram_business_account_id=instagram_business_account_id,
+        instagram_access_token=instagram_access_token,
+        cors_allow_origins=cors_allow_origins,
     )

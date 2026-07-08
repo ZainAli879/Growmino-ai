@@ -1,10 +1,10 @@
-# AI Post Generator (Backend Only)
+# AI Post Generator Backend
 
-Backend-only FastAPI service that generates:
+FastAPI backend that generates:
 - One finalized social media caption + headline
 - One provider-generated image aligned to that caption (`infip` by default)
-
-Optional local Streamlit helper UI is included for easier testing.
+- One Meta publishing flow for Facebook and Instagram
+- One image upload endpoint for the separate React frontend
 
 ## Tech Stack
 - Python 3.11+
@@ -30,7 +30,6 @@ Optional local Streamlit helper UI is included for easier testing.
     prompt_library.py
     utils.py
   /outputs
-  streamlit_app.py
   requirements.txt
   .env.example
   README.md
@@ -84,7 +83,7 @@ Optional:
 - `INSTAGRAM_IMAGE_SIZE` (default: `1080x1350`)
 - `FACEBOOK_IMAGE_SIZE` (default: `1200x630`)
 - `REQUEST_TIMEOUT_SECONDS` (default: `300`)
-- `UI_API_TIMEOUT_SECONDS` (default: `300` for Streamlit)
+- `OUTPUTS_DIR` (default: `./outputs`)
 - `TRACES_FILE` (default: `./outputs/traces/generation-traces.jsonl`)
 - `GOOGLE_CREDENTIALS_JSON_PATH` (service-account JSON path)
 - `GOOGLE_SPREADSHEET_ID` (Google Sheet ID)
@@ -93,6 +92,13 @@ Optional:
 - `DEFAULT_COMPANY_LOGO_PATH` (optional local logo fallback used when sheet `company_logo_url` is empty)
 - `LOGO_INPUT_MODE` (`overlay`, `reference`, `both`; default `overlay`. `both` is recommended)
 - `HEADLINE_OVERLAY_ENABLED` (`true`/`false`, default `true`; recommended `true` for crisp, typo-free headline text)
+- `META_GRAPH_API_VERSION` (default `v25.0`)
+- `META_ACCESS_TOKEN` (optional shared default token for Facebook/Instagram publishing)
+- `FACEBOOK_PAGE_ID` (optional default for Facebook publishing)
+- `FACEBOOK_ACCESS_TOKEN` (optional Facebook-specific token override)
+- `INSTAGRAM_BUSINESS_ACCOUNT_ID` (optional default for Instagram publishing)
+- `INSTAGRAM_ACCESS_TOKEN` (optional Instagram-specific token override)
+- `CORS_ALLOW_ORIGINS` (default: `http://localhost:5173,http://127.0.0.1:5173`)
 
 ## Run
 
@@ -106,25 +112,20 @@ Or use `PORT` from env:
 uvicorn app.main:app --host 0.0.0.0 --port $env:PORT --reload
 ```
 
-## Optional Streamlit UI
+## React Frontend
 
-In a second terminal (with the same venv active):
-
-```powershell
-streamlit run streamlit_app.py
-```
-
-Open:
+The UI now lives in a separate sibling app:
 
 ```text
-http://localhost:8501
+../ai-postgen-web
 ```
 
-By default the UI calls:
-
-```text
-http://127.0.0.1:8000/generate
-```
+It handles:
+- content setup
+- AI generation
+- image preview
+- manual image upload
+- Facebook and Instagram publishing
 
 ## API
 
@@ -137,6 +138,28 @@ Response now includes:
 - `openai_image`
 - `qa` (non-blocking checks + warnings)
 - `trace` (timings, provider/model, trace id)
+
+`openai_image` now also includes:
+- `public_url` for browser preview via the backend `/outputs/...` route
+
+### POST `/publish-meta`
+
+Publishes the caption to Facebook or Instagram.
+
+- Facebook supports text-only or image posts
+- Instagram requires an image
+- `image_url` can be a public URL
+- `image_file_path` can be a local generated/uploaded image path; the backend uploads it to Google Drive automatically when needed
+
+### POST `/upload-image`
+
+Accepts a JSON body with `file_name` and `data_url`, saves the image under `outputs/manual_uploads/`, and returns:
+- `file_path`
+- `public_url`
+
+### GET `/health`
+
+Simple frontend/backend connectivity check.
 
 ### LinkedIn cURL example
 
