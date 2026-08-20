@@ -60,7 +60,7 @@ CONTENT_TYPE_RULES: dict[ContentTypeEnum, str] = {
 
 CAPTION_TEMPLATE = """
 You are an elite, top-tier social media copywriter in 2026, creating native, algorithm-friendly content.
-Create one finalized caption and one headline/hook.
+Create one finalized caption and one short hook/headline.
 Output strict JSON only. No markdown fences.
 
 Business context:
@@ -107,13 +107,13 @@ Formatting requirements:
 
 Output JSON with exactly these keys:
 - "caption": full post caption text
-- "headline": one ultra-short hook/headline designed to be overlaid on an image.
+- "headline": one ultra-short hook/headline that summarizes the post and can be used as optional visual text.
 
 Headline quality rules:
-- 3-7 words ONLY. Hyper-concise.
+- 3-8 words ONLY. Hyper-concise.
 - Title Case for major words.
 - No hashtags, emojis, or trailing punctuation.
-- Must be instantly readable in under 1 second when overlaid on graphic.
+- Must be instantly readable in under 1 second.
 """.strip()
 
 NEGATIVE_IMAGE_PROMPT = "boring stock photo, generic corporate, 2010s aesthetic, flat lighting, artificial CGI look, AI artifacts, plastic skin, cluttered UI, messy text, watermarks, signature, cheesy models, low resolution, bad anatomy, overused marketing templates"
@@ -138,34 +138,109 @@ IMAGE_TEXT_LAYOUT_OPTIONS: list[str] = [
 ]
 
 IMAGE_PROMPT_FROM_CAPTION_TEMPLATE = """
-You convert a social caption into a production-ready, highly artistic image generation prompt for a cutting-edge 2026 AI image model (like Midjourney v6).
+You are a senior creative director for social media ads and organic business content.
+Convert the post content and business context into one production-ready image generation prompt for a modern AI image model.
 Output exactly ONE plain-text prompt only. No markdown. No labels. No explanations.
+
+Business context:
+- Business: {business_name}
+- Industry: {industry}
+- Offer: {offer}
+- Target audience: {target_audience}
+- Audience pain points: {audience_pain_points}
+- Weekly focus topic: {weekly_focus_topic}
+- Content type: {content_type}
+- Platform: {platform}
+- Tone: {tone}
+- Brand personality: {brand_personality}
 
 Caption:
 {caption}
 
+Optional post hook:
+{headline}
+
 Prompt requirements:
-- Generate an extremely detailed, hyper-realistic, or highly stylized 2026 trending aesthetic prompt.
-- The background MUST be highly relevant and directly connected to the caption's core message and context - not generic or unrelated scenes.
-- Incorporate specific camera angles, cinematic lighting, and lens descriptions (e.g., "shot on 35mm lens, depth of field, volumetric lighting, rim light").
-- Render exactly ONE headline text line. It MUST exactly match this text: "{headline}". The text should be displayed as a clean graphic overlay element as a semi-transparent box or banner - NOT as 3D text embedded into buildings, signs, or scene objects. The text must be a floating overlay that sits ON TOP of the image.
-- The text should be displayed as a single continuous line without breaking into multiple stacked lines and positioned in a clearly visible location such as top, bottom or side areas of the image.
-- Use this specific 2026 text layout/UI style: "{text_layout_style}".
-- Always include the company/brand logo positioned in the TOP RIGHT CORNER of the image - separate and independent from any text overlays or boxes, positioned directly on the image without a background container.
-- The logo MUST appear ONLY in the TOP RIGHT CORNER - do NOT place the logo anywhere else in the image, in backgrounds, on scene objects, or repeated elsewhere. One logo placement only.
-- The logo color MUST remain unchanged in all conditions. Only minimal border refinement or edge adjustments are allowed to enhance presentation.
-- For branding consistency, the headline text color and any overlay background should match or harmonize with the logo's primary colors.
-- The logo and headline text are SEPARATE elements - do NOT group them together in the same overlay or box. The logo stays in the top right corner on its own.
-- Do NOT add any other extra text, UI elements, or watermarks beyond the required logo.
-- The typography must be bold, hyper-modern, and naturally integrated as an overlay.
-- Create an image that feels like premium, top-tier agency creative work--not a cheap stock photo.
-- Instead of literal interpretations, use powerful visual metaphors or highly aesthetic lifestyle imagery that connects emotionally to the caption's value and directly reflects the caption's meaning.
-- Emphasize rich textures, dynamic color grading, and high-end commercial art direction.
-- Keep the composition balanced to allow the "{text_layout_style}" overlay to stand out clearly against the background.
-- Ensure the scene is authentic, raw, and high-converting (UGC-style realness combined with editorial polish).
-- Include camera modifiers like "8k resolution, photorealistic, highly detailed, octane render, Unreal Engine 5 aesthetic, editorial fashion photography" depending on what fits the brand tone best.
-- Vary the perspective (drone shot, extreme close-up, dynamic low angle, eye-level intimate portrait) based on the emotional core of the caption.
+- First infer the core message of the caption, the audience pain, the promised transformation, and the best scroll-stopping visual angle.
+- Decide the strongest visual format for this specific post: realistic editorial scene, lifestyle photo, productized workflow visual, infographic, comparison graphic, symbolic metaphor, clean brand image, or hybrid photo-plus-graphic layout.
+- Do not force the optional hook into the image. Use it only if it is genuinely the best visual text.
+- Only include text when it improves comprehension or stopping power. If text is useful, choose 1-2 very short text elements derived from the caption/business context; no paragraphs, no hashtags, no CTA blocks, no made-up claims.
+- If this is educational, tactical, automation, or process-driven content, an infographic, simple diagram, workflow map, before/after comparison, or annotated visual is allowed.
+- If this is founder authority, testimonial, or case-study content, prioritize realistic human/editorial imagery unless a compact proof-style graphic is clearly stronger.
+- If proof assets are missing, do not invent numbers, client names, testimonials, awards, charts, dashboards, or outcomes.
+- The image MUST be highly relevant to the business, audience, platform, and caption. Avoid generic office stock imagery and unrelated abstract scenes.
+- Include concrete visual direction: subject, setting, foreground/background, camera angle or graphic layout, lighting, color mood, focal hierarchy, and negative space.
+- Use this optional 2026 layout inspiration only when text, diagram, or infographic elements are appropriate: "{text_layout_style}".
+- {logo_instruction}
+- Business name is context only. Do not render the business name, app name, company wordmark, initials, icon, badge, or fake logo unless it is part of an exact externally provided logo instruction.
+- Do not add random UI text, fake app screens, fake metrics, fake client names, fake awards, watermarks, signatures, or unrelated labels.
+- Create an image that feels like premium, top-tier agency creative work, not a cheap stock photo or generic template.
+- Prefer powerful visual metaphors, realistic high-end lifestyle imagery, or clean business graphics that communicate the caption's value at a glance.
+- Emphasize rich textures, dynamic color grading, natural lighting, high-end commercial art direction, and platform-ready composition.
+- Keep composition balanced, readable on mobile, and free of clutter.
+- Choose camera modifiers and rendering language only when they fit the chosen format: photorealistic editorial photography, clean vector infographic, premium SaaS graphic, cinematic lifestyle image, or polished brand campaign visual.
 - Do not output placeholder tokens.
 
 Return only the final image generation prompt.
+""".strip()
+
+WEEKLY_CONTENT_PLAN_TEMPLATE = """
+You are a senior social media strategist planning a one-week content calendar in 2026.
+Create a non-repetitive weekly plan before any captions or images are generated.
+Output strict JSON only. No markdown fences. No commentary.
+
+Business profile:
+- Business: {business_name}
+- Industry: {industry}
+- Offer: {offer}
+- Target audience: {target_audience}
+- Audience pain points: {audience_pain_points}
+- Tone: {tone}
+- Brand personality: {brand_personality}
+- CTA preference: {cta_preference}
+- Proof assets: {proof_assets}
+
+Weekly campaign:
+- Week start date: {week_start_date}
+- Weekly goal: {weekly_goal}
+- Theme: {theme}
+- Platforms: {platforms}
+- Number of posts: {posts_count}
+
+Recent generated posts to avoid repeating:
+{recent_posts}
+
+Content calendar rules:
+- Use only these day/content-type mappings:
+  Monday -> Educational
+  Tuesday -> Pain-point
+  Wednesday -> Case Study
+  Thursday -> Industry Insight
+  Friday -> Founder Authority
+  Saturday -> Automation Tip
+  Sunday -> Client Testimonial
+- If posts_count is under 7, choose the strongest days for this campaign.
+- Each item must have a unique topic, angle, hook direction, CTA direction, and visual direction.
+- Do not repeat previous hooks, claims, visual concepts, or CTAs from recent posts.
+- Do not invent client results, testimonials, numbers, awards, or case-study metrics.
+- If proof assets are weak or empty, case-study/testimonial angles must ask for proof rather than inventing it.
+- Plan for strategic variety: education, pain agitation, authority, practical workflow, proof/testimonial only when supported.
+- Keep topics specific enough that generating posts from them will not feel generic.
+
+Output JSON with exactly this shape:
+{{
+  "items": [
+    {{
+      "position": 1,
+      "day": "Monday",
+      "platform": "linkedin",
+      "content_type": "Educational",
+      "topic": "Specific post topic",
+      "angle": "Specific strategic angle",
+      "hook_direction": "How the hook should open",
+      "cta_direction": "What the reader should do next",
+      "visual_direction": "What the image should communicate"
+    }}
+  ]
+}}
 """.strip()

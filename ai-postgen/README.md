@@ -2,7 +2,8 @@
 
 FastAPI backend that generates:
 - One finalized social media caption + headline
-- One provider-generated image aligned to that caption (`infip` by default)
+- One provider-generated image aligned to that caption using OpenAI or OpenRouter
+- Optional Supabase Storage upload + `generated_posts` database record
 - One Meta publishing flow for Facebook and Instagram
 - One image upload endpoint for the separate React frontend
 
@@ -14,6 +15,7 @@ FastAPI backend that generates:
 - Official OpenAI Python SDK
 - python-dotenv
 - Pillow (installed, optional)
+- Supabase client
 
 ## Project Structure
 
@@ -28,6 +30,7 @@ FastAPI backend that generates:
     openai_clients.py
     validators.py
     prompt_library.py
+    supabase_store.py
     utils.py
   /outputs
   requirements.txt
@@ -62,22 +65,19 @@ copy .env.example .env
 
 Required environment variables:
 - `TEXT_PROVIDER` (`openai` or `openrouter`, default `openai`)
-- `IMAGE_PROVIDER` (`infip`, `openai`, `openrouter`, or `custom`, default `infip`)
+- `IMAGE_PROVIDER` (`openai` or `openrouter`, default `openai`)
 - `OPENAI_API_KEY` (required when `TEXT_PROVIDER=openai` or `IMAGE_PROVIDER=openai`)
 - `OPENROUTER_API_KEY` (required when `TEXT_PROVIDER=openrouter` or `IMAGE_PROVIDER=openrouter`)
-- `INFIP_API_KEY` (required when `IMAGE_PROVIDER=infip`)
 
 Optional:
 - `CAPTION_MODEL` (default: `gpt-4o-mini`, used for `TEXT_PROVIDER=openai`)
 - `OPENAI_BASE_URL` (default: `https://api.openai.com/v1`)
-- `OPENAI_IMAGE_MODEL` (default: `gpt-image-1`)
+- `OPENAI_IMAGE_MODEL` (default: `gpt-image-2`)
 - `OPENROUTER_BASE_URL` (default: `https://openrouter.ai/api/v1`)
 - `OPENROUTER_TEXT_MODEL` (default: `openai/gpt-4o-mini`)
 - `OPENROUTER_IMAGE_MODEL` (default: `openai/gpt-image-1`)
 - `OPENROUTER_HTTP_REFERER` (optional, recommended for OpenRouter)
 - `OPENROUTER_APP_NAME` (optional title header for OpenRouter, default: `ai-postgen`)
-- `INFIP_BASE_URL` (default: `https://api.infip.pro/v1`)
-- `INFIP_IMAGE_MODEL` (default: `img4`)
 - `IMAGE_SIZE` fallback size (default: `1024x1024`)
 - `LINKEDIN_IMAGE_SIZE` (default: `1200x1200`)
 - `INSTAGRAM_IMAGE_SIZE` (default: `1080x1350`)
@@ -85,13 +85,17 @@ Optional:
 - `REQUEST_TIMEOUT_SECONDS` (default: `300`)
 - `OUTPUTS_DIR` (default: `./outputs`)
 - `TRACES_FILE` (default: `./outputs/traces/generation-traces.jsonl`)
+- `DATABASE_URL` (Supabase Postgres connection string, reserved for migrations/direct DB use)
+- `SUPABASE_URL` (Supabase project URL)
+- `SUPABASE_SERVICE_ROLE_KEY` (backend-only Supabase service role API key)
+- `SUPABASE_SECRET_KEY` (fallback key name; service role key is preferred)
+- `SUPABASE_STORAGE_BUCKET` (bucket for generated images, for example `generated-posts`)
 - `GOOGLE_CREDENTIALS_JSON_PATH` (service-account JSON path)
 - `GOOGLE_SPREADSHEET_ID` (Google Sheet ID)
 - `GOOGLE_SHEET_NAME` (tab name, default `Sheet1`)
 - `GOOGLE_DRIVE_FOLDER_ID` (Drive folder for uploaded images)
 - `DEFAULT_COMPANY_LOGO_PATH` (optional local logo fallback used when sheet `company_logo_url` is empty)
 - `LOGO_INPUT_MODE` (`overlay`, `reference`, `both`; default `overlay`. `both` is recommended)
-- `HEADLINE_OVERLAY_ENABLED` (`true`/`false`, default `true`; recommended `true` for crisp, typo-free headline text)
 - `META_GRAPH_API_VERSION` (default `v25.0`)
 - `META_ACCESS_TOKEN` (optional shared default token for Facebook/Instagram publishing)
 - `FACEBOOK_PAGE_ID` (optional default for Facebook publishing)
@@ -129,10 +133,16 @@ It handles:
 
 ## API
 
-### POST `/generate`
+### GET `/api/v1/health`
+
+Simple frontend/backend connectivity check.
+
+### POST `/api/v1/posts`
 
 Generates one caption and one image, saves the image locally, and returns JSON.
+When Supabase variables are configured, it also uploads the final image to Supabase Storage and inserts a row into `generated_posts`.
 Response now includes:
+- `post_id` (Supabase `generated_posts.id` when persistence is enabled)
 - `caption`
 - `headline`
 - `openai_image`
@@ -140,9 +150,48 @@ Response now includes:
 - `trace` (timings, provider/model, trace id)
 
 `openai_image` now also includes:
-- `public_url` for browser preview via the backend `/outputs/...` route
+- `public_url` for browser preview. This is a Supabase Storage URL when Supabase persistence is enabled; otherwise it uses the backend `/outputs/...` route.
 
-### POST `/publish-meta`
+### GET `/api/v1/posts`
+
+Returns previously generated posts from Supabase, newest first.
+
+Optional query parameter:
+- `limit` (default `50`, max `100`)
+
+### GET `/api/v1/posts/{post_id}`
+
+Returns one previously generated post from Supabase.
+
+### POST `/api/v1/content-plans`
+
+Creates a one-week strategic content plan, then automatically generates each planned post.
+
+The plan uses:
+- business profile
+- weekly goal
+- theme
+- target platforms
+- recent generated posts from Supabase when available
+
+Response includes planned items plus generated post outputs:
+- day
+- platform
+- content type
+- topic
+- angle
+- hook direction
+- CTA direction
+- visual direction
+- generation status
+- generated post id
+- generated caption
+- generated headline
+- generated image URL
+
+This endpoint can take longer than single-post generation because it creates multiple captions/images and saves them.
+
+### POST `/api/v1/publishing-jobs`
 
 Publishes the caption to Facebook or Instagram.
 
@@ -151,20 +200,16 @@ Publishes the caption to Facebook or Instagram.
 - `image_url` can be a public URL
 - `image_file_path` can be a local generated/uploaded image path; the backend uploads it to Google Drive automatically when needed
 
-### POST `/upload-image`
+### POST `/api/v1/assets`
 
 Accepts a JSON body with `file_name` and `data_url`, saves the image under `outputs/manual_uploads/`, and returns:
 - `file_path`
 - `public_url`
 
-### GET `/health`
-
-Simple frontend/backend connectivity check.
-
 ### LinkedIn cURL example
 
 ```bash
-curl -X POST "http://localhost:8000/generate" \
+curl -X POST "http://localhost:8000/api/v1/posts" \
   -H "Content-Type: application/json" \
   -d '{
     "business_name": "FlowOps Studio",
@@ -187,7 +232,7 @@ curl -X POST "http://localhost:8000/generate" \
 ### Instagram cURL example
 
 ```bash
-curl -X POST "http://localhost:8000/generate" \
+curl -X POST "http://localhost:8000/api/v1/posts" \
   -H "Content-Type: application/json" \
   -d '{
     "business_name": "FlowOps Studio",
@@ -225,7 +270,7 @@ Example:
 Run the backend first, then execute:
 
 ```powershell
-python scripts/run_golden_smoke.py --api http://127.0.0.1:8000/generate
+python scripts/run_golden_smoke.py --api http://127.0.0.1:8000/api/v1/posts
 ```
 
 Golden test inputs are in `tests/golden_requests.json`.

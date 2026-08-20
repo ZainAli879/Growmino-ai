@@ -85,6 +85,84 @@ class GenerateRequest(BaseModel):
         return self
 
 
+class WeeklyContentPlanRequest(BaseModel):
+    business_name: str
+    industry: str
+    offer: str
+    target_audience: str
+    audience_pain_points: str
+    tone: str
+    brand_personality: str
+    cta_preference: str = ""
+    proof_assets: str = ""
+    company_logo_url: str = ""
+    week_start_date: str = ""
+    weekly_goal: str
+    theme: str
+    platforms: list[PlatformEnum] = Field(default_factory=lambda: [PlatformEnum.linkedin])
+    posts_count: int = Field(default=5, ge=1, le=7)
+
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    @field_validator("platforms", mode="before")
+    @classmethod
+    def normalize_platforms(cls, value: object) -> object:
+        if isinstance(value, str):
+            return [item.strip().lower() for item in value.split(",") if item.strip()]
+        if isinstance(value, list):
+            return [item.strip().lower() if isinstance(item, str) else item for item in value]
+        return value
+
+    @model_validator(mode="after")
+    def validate_weekly_plan_required(self) -> "WeeklyContentPlanRequest":
+        required_fields = [
+            "business_name",
+            "industry",
+            "offer",
+            "target_audience",
+            "audience_pain_points",
+            "tone",
+            "brand_personality",
+            "weekly_goal",
+            "theme",
+        ]
+        for field_name in required_fields:
+            value = getattr(self, field_name, "")
+            if not isinstance(value, str) or not value.strip():
+                raise ValueError(f"{field_name} is required and must be non-empty.")
+        if not self.platforms:
+            raise ValueError("platforms must include at least one platform.")
+        return self
+
+
+class ContentPlanItem(BaseModel):
+    position: int
+    day: DayEnum
+    platform: PlatformEnum
+    content_type: ContentTypeEnum
+    topic: str
+    angle: str
+    hook_direction: str
+    cta_direction: str
+    visual_direction: str
+    generation_status: str = "planned"
+    generated_post_id: str = ""
+    generated_caption: str = ""
+    generated_headline: str = ""
+    generated_image_url: str = ""
+    generation_error: str = ""
+
+
+class ContentPlanResponse(BaseModel):
+    plan_id: str
+    status: str = "planned"
+    week_start_date: str = ""
+    weekly_goal: str
+    theme: str
+    total_posts: int
+    items: list[ContentPlanItem]
+
+
 class MetaInfo(BaseModel):
     platform: PlatformEnum
     day: DayEnum
@@ -128,12 +206,33 @@ class TraceInfo(BaseModel):
 
 
 class GenerateResponse(BaseModel):
+    post_id: str = ""
     meta: MetaInfo
     caption: str
     headline: str
     openai_image: OpenAIImageInfo
     qa: QAInfo | None = None
     trace: TraceInfo | None = None
+
+
+class GeneratedPostSummary(BaseModel):
+    id: str
+    platform: str = ""
+    day: str = ""
+    content_type: str = ""
+    topic: str = ""
+    caption: str = ""
+    headline: str = ""
+    image_url: str = ""
+    image_file_path: str = ""
+    alt_text: str = ""
+    status: str = ""
+    created_at: str = ""
+    updated_at: str = ""
+
+
+class GeneratedPostsResponse(BaseModel):
+    posts: list[GeneratedPostSummary]
 
 
 class PublishRequest(BaseModel):

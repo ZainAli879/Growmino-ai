@@ -22,8 +22,8 @@ def _hashtag_limits(platform: str) -> tuple[int, int]:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Run golden smoke checks against /generate API.")
-    parser.add_argument("--api", default="http://127.0.0.1:8000/generate", help="API endpoint URL")
+    parser = argparse.ArgumentParser(description="Run golden smoke checks against the posts API.")
+    parser.add_argument("--api", default="http://127.0.0.1:8000/api/v1/posts", help="API endpoint URL")
     parser.add_argument(
         "--cases",
         default=str(Path("tests") / "golden_requests.json"),

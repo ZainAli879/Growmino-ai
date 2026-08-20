@@ -10,9 +10,9 @@ from urllib.parse import parse_qs, urlparse
 import requests
 from PIL import Image, ImageDraw, ImageFont
 
-from app.chains import CaptionGenerationResult, generate_caption_with_retry, generate_image_prompt_from_caption
+from app.chains import CaptionGenerationResult, generate_caption_with_retry, generate_image_prompt_from_caption, generate_weekly_content_plan
 from app.config import Settings
-from app.schemas import GenerateRequest
+from app.schemas import ContentPlanResponse, GenerateRequest, WeeklyContentPlanRequest
 from app.utils import build_alt_text, build_output_file_path, ensure_outputs_dir
 
 _OPENAI_SUPPORTED_SIZES = {"1024x1024", "1024x1536", "1536x1024", "auto"}
@@ -313,6 +313,19 @@ def generate_caption(payload: GenerateRequest, settings: Settings) -> CaptionGen
     )
 
 
+def generate_content_plan(request: WeeklyContentPlanRequest, settings: Settings, plan_id: str, recent_posts: str) -> ContentPlanResponse:
+    provider, model_name, base_url, default_headers = _text_generation_client_config(settings)
+    return generate_weekly_content_plan(
+        request=request,
+        plan_id=plan_id,
+        recent_posts=recent_posts,
+        api_key=_text_generation_api_key(settings, provider),
+        model_name=model_name,
+        base_url=base_url,
+        default_headers=default_headers,
+    )
+
+
 def generate_image(payload: GenerateRequest, settings: Settings, caption: str, headline: str) -> ImageGenerationResult:
     style = "caption_derived"
     requested_size = settings.image_size_for_platform(payload.platform.value)
@@ -322,7 +335,7 @@ def generate_image(payload: GenerateRequest, settings: Settings, caption: str, h
     text_provider, text_model, text_base_url, text_default_headers = _text_generation_client_config(settings)
     has_logo = bool((payload.company_logo_url or "").strip())
     logo_mode = (settings.logo_input_mode or "overlay").strip().lower()
-    supports_reference_logo = settings.image_provider in {"openrouter", "infip"}
+    supports_reference_logo = settings.image_provider == "openrouter"
     use_reference_logo = has_logo and logo_mode in {"reference", "both"} and supports_reference_logo
     use_overlay_logo = has_logo and logo_mode in {"overlay", "both"}
     if has_logo and logo_mode == "reference" and not supports_reference_logo:
@@ -333,22 +346,46 @@ def generate_image(payload: GenerateRequest, settings: Settings, caption: str, h
     if has_logo:
         logo_bytes = _load_logo_bytes(payload.company_logo_url, settings.request_timeout_seconds)
 
+    if use_reference_logo:
+        logo_instruction = (
+            "Logo handling: a real logo reference image is attached. Use only that exact provided logo "
+            "as a small brand mark in the top-right corner. Do not invent, redraw, distort, recolor, "
+            "repeat, stylize, or supplement it. Do not create any additional logo, company name, app name, "
+            "initials, icon, badge, or wordmark anywhere in the image."
+        )
+    elif use_overlay_logo:
+        logo_instruction = (
+            "Logo handling: the system will add the real logo after image generation. Leave clean negative "
+            "space in the top-right corner for that external overlay. Do not generate any logo, company name, "
+            "app name, initials, icon, badge, wordmark, brand mark, or fake UI logo anywhere in the image."
+        )
+    else:
+        logo_instruction = (
+            "Logo handling: no logo was provided. Do not generate any logo, company name, app name, initials, "
+            "icon, badge, wordmark, brand mark, or fake UI logo anywhere in the image. Keep the visual unbranded."
+        )
+
     prompt = generate_image_prompt_from_caption(
+        payload=payload,
         caption=caption,
         headline=headline,
+        logo_instruction=logo_instruction,
         api_key=_text_generation_api_key(settings, text_provider),
         model_name=text_model,
         base_url=text_base_url,
         default_headers=text_default_headers,
     ).strip()
-    prompt = (
-        f"{prompt}\nMandatory text rule: render this exact headline text only, with identical wording and spelling: \"{headline}\"."
-        "\nDo not paraphrase, truncate, add words, or alter punctuation."
-    )
 
-    # Keep prompt simple and natural (no over-constraining).
     if use_overlay_logo:
-        prompt = f"{prompt}\nKeep composition clean for external logo overlay."
+        prompt = (
+            f"{prompt}\nFinal hard rule: do not create or draw any logo/wordmark/app name yourself. "
+            "The only logo will be added externally after generation."
+        )
+    elif not has_logo:
+        prompt = (
+            f"{prompt}\nFinal hard rule: no logos, no company names, no app names, no initials, "
+            "no brand marks, and no fake product UI branding anywhere."
+        )
 
     outputs_dir = ensure_outputs_dir(settings.outputs_dir)
     file_path = build_output_file_path(
@@ -358,19 +395,7 @@ def generate_image(payload: GenerateRequest, settings: Settings, caption: str, h
         content_type=payload.content_type.value,
     )
 
-    if settings.image_provider == "custom":
-        endpoint = f"{settings.custom_image_base_url}/v1/images/generations"
-        headers = {"Content-Type": "application/json"}
-        body = {
-            "prompt": prompt,
-            "size": selected_size,
-            "steps": settings.custom_image_steps,
-            "guidance": settings.custom_image_guidance,
-            "n": settings.custom_image_n,
-            "seed": settings.custom_image_seed,
-        }
-        provider_label = "custom"
-    elif settings.image_provider == "openrouter":
+    if settings.image_provider == "openrouter":
         endpoint = f"{settings.openrouter_base_url}/chat/completions"
         headers = _openrouter_headers(settings)
         user_content: object = prompt
@@ -389,7 +414,7 @@ def generate_image(payload: GenerateRequest, settings: Settings, caption: str, h
             "stream": False,
         }
         provider_label = settings.openrouter_image_model
-    elif settings.image_provider == "openai":
+    else:
         endpoint = f"{settings.openai_base_url}/images/generations"
         headers = {
             "Authorization": f"Bearer {settings.openai_api_key}",
@@ -401,25 +426,6 @@ def generate_image(payload: GenerateRequest, settings: Settings, caption: str, h
             "size": selected_size,
         }
         provider_label = settings.openai_image_model
-    else:
-        if use_reference_logo and logo_bytes is not None:
-            endpoint = f"{settings.infip_base_url}/images/edits"
-            headers = {
-                "Authorization": f"Bearer {settings.infip_api_key}",
-            }
-        else:
-            endpoint = f"{settings.infip_base_url}/images/generations"
-            headers = {
-                "Authorization": f"Bearer {settings.infip_api_key}",
-                "Content-Type": "application/json",
-            }
-        body = {
-            "model": settings.infip_image_model,
-            "prompt": prompt,
-            "size": selected_size,
-            "response_format": settings.infip_image_response_format,
-        }
-        provider_label = settings.infip_image_model
 
     def _extract_error_detail(resp: requests.Response) -> str:
         try:
@@ -435,41 +441,9 @@ def generate_image(payload: GenerateRequest, settings: Settings, caption: str, h
 
     try:
         def _post_current(request_body: dict):
-            if settings.image_provider == "infip" and use_reference_logo and logo_bytes is not None:
-                return requests.post(
-                    endpoint,
-                    headers=headers,
-                    data=request_body,
-                    files={"image": ("logo.png", logo_bytes, "image/png")},
-                    timeout=settings.request_timeout_seconds,
-                )
             return requests.post(endpoint, headers=headers, json=request_body, timeout=settings.request_timeout_seconds)
 
         response = _post_current(body)
-
-        if (
-            not response.ok
-            and settings.image_provider == "infip"
-            and not use_reference_logo
-            and response.status_code == 403
-            and "pro" in _extract_error_detail(response).lower()
-            and body.get("model") != "img4"
-        ):
-            body["model"] = "img4"
-            provider_label = "img4"
-            response = _post_current(body)
-
-        if (
-            not response.ok
-            and settings.image_provider == "infip"
-            and response.status_code == 400
-            and body.get("model") == "img4"
-            and "size" in _extract_error_detail(response).lower()
-            and body.get("size") != "1024x1024"
-        ):
-            body["size"] = "1024x1024"
-            used_size = "1024x1024"
-            response = _post_current(body)
 
         if not response.ok:
             raise RuntimeError(
@@ -502,8 +476,6 @@ def generate_image(payload: GenerateRequest, settings: Settings, caption: str, h
 
     if not image_bytes:
         raise RuntimeError(f"Image response did not include an image payload [{settings.image_provider}].")
-
-    # User-selected mode: rely on model-rendered headline text (no post-generation headline overlay).
 
     if use_overlay_logo and logo_bytes is not None:
         image_bytes = _overlay_logo(image_bytes, logo_bytes)
