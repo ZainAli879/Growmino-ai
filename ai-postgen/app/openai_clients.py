@@ -5,7 +5,6 @@ from dataclasses import dataclass
 from io import BytesIO
 import math
 from pathlib import Path
-from urllib.parse import parse_qs, urlparse
 
 import requests
 from PIL import Image, ImageDraw, ImageFont
@@ -195,21 +194,6 @@ def _overlay_headline(image_bytes: bytes, headline: str) -> bytes:
         return out.getvalue()
 
 
-def _extract_google_drive_file_id(url: str) -> str:
-    parsed = urlparse(url)
-    path = parsed.path or ""
-    if "/file/d/" in path:
-        candidate = path.split("/file/d/", 1)[1].split("/", 1)[0].strip()
-        if candidate:
-            return candidate
-    query = parse_qs(parsed.query or "")
-    for key in ("id", "file_id"):
-        value = (query.get(key) or [""])[0].strip()
-        if value:
-            return value
-    return ""
-
-
 def _assert_valid_image_bytes(data: bytes, source: str) -> None:
     try:
         with Image.open(BytesIO(data)) as im:
@@ -224,11 +208,6 @@ def _load_logo_bytes(logo_ref: str, timeout_seconds: int) -> bytes:
         raise RuntimeError("Logo reference is empty.")
 
     if value.startswith("http://") or value.startswith("https://"):
-        # Convert Drive share link to direct download when possible.
-        if "drive.google.com" in value or "docs.google.com" in value:
-            file_id = _extract_google_drive_file_id(value)
-            if file_id:
-                value = f"https://drive.google.com/uc?export=download&id={file_id}"
         response = requests.get(value, timeout=timeout_seconds)
         response.raise_for_status()
         data = response.content

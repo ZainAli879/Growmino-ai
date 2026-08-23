@@ -1,0 +1,180 @@
+{
+  "info": {
+    "name": "GrowMino LinkedIn Personal Profile API",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "base_url", "value": "http://localhost:8000" },
+    { "key": "user_id", "value": "local-user" },
+    { "key": "business_id", "value": "local-business" },
+    { "key": "post_id", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "LinkedIn Connect",
+      "request": {
+        "method": "GET",
+        "header": [
+          { "key": "X-Growmino-User-Id", "value": "{{user_id}}" },
+          { "key": "X-Growmino-Business-Id", "value": "{{business_id}}" }
+        ],
+        "url": "{{base_url}}/api/v1/integrations/linkedin/connect"
+      }
+    },
+    {
+      "name": "LinkedIn Status",
+      "request": {
+        "method": "GET",
+        "header": [
+          { "key": "X-Growmino-User-Id", "value": "{{user_id}}" },
+          { "key": "X-Growmino-Business-Id", "value": "{{business_id}}" }
+        ],
+        "url": "{{base_url}}/api/v1/integrations/linkedin/status"
+      }
+    },
+    {
+      "name": "LinkedIn Disconnect",
+      "request": {
+        "method": "DELETE",
+        "header": [
+          { "key": "X-Growmino-User-Id", "value": "{{user_id}}" },
+          { "key": "X-Growmino-Business-Id", "value": "{{business_id}}" }
+        ],
+        "url": "{{base_url}}/api/v1/integrations/linkedin/disconnect"
+      }
+    },
+    {
+      "name": "Publish Text",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "X-Growmino-User-Id", "value": "{{user_id}}" },
+          { "key": "X-Growmino-Business-Id", "value": "{{business_id}}" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"caption\": \"Testing GrowMino LinkedIn personal profile publishing.\",\n  \"idempotency_key\": \"{{$guid}}\"\n}"
+        },
+        "url": "{{base_url}}/api/v1/posts/linkedin/publish-text"
+      }
+    },
+    {
+      "name": "Publish Image Upload",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "X-Growmino-User-Id", "value": "{{user_id}}" },
+          { "key": "X-Growmino-Business-Id", "value": "{{business_id}}" }
+        ],
+        "body": {
+          "mode": "formdata",
+          "formdata": [
+            { "key": "caption", "value": "Image post from GrowMino.", "type": "text" },
+            { "key": "idempotency_key", "value": "{{$guid}}", "type": "text" },
+            { "key": "file", "type": "file", "src": [] }
+          ]
+        },
+        "url": "{{base_url}}/api/v1/posts/linkedin/publish-image"
+      }
+    },
+    {
+      "name": "Publish Image URL",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "X-Growmino-User-Id", "value": "{{user_id}}" },
+          { "key": "X-Growmino-Business-Id", "value": "{{business_id}}" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"caption\": \"Image URL post from GrowMino.\",\n  \"image_url\": \"https://example.com/image.png\",\n  \"idempotency_key\": \"{{$guid}}\"\n}"
+        },
+        "url": "{{base_url}}/api/v1/posts/linkedin/publish-image-url"
+      }
+    },
+    {
+      "name": "Publish Multi-Image",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "X-Growmino-User-Id", "value": "{{user_id}}" },
+          { "key": "X-Growmino-Business-Id", "value": "{{business_id}}" }
+        ],
+        "body": {
+          "mode": "formdata",
+          "formdata": [
+            { "key": "caption", "value": "Multi-image post from GrowMino.", "type": "text" },
+            { "key": "idempotency_key", "value": "{{$guid}}", "type": "text" },
+            { "key": "alt_texts", "value": "First image alt text", "type": "text" },
+            { "key": "alt_texts", "value": "Second image alt text", "type": "text" },
+            { "key": "images", "type": "file", "src": [] },
+            { "key": "images", "type": "file", "src": [] }
+          ]
+        },
+        "url": "{{base_url}}/api/v1/social/linkedin/posts/multi-image"
+      }
+    },
+    {
+      "name": "Schedule",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "X-Growmino-User-Id", "value": "{{user_id}}" },
+          { "key": "X-Growmino-Business-Id", "value": "{{business_id}}" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"caption\": \"Scheduled LinkedIn post from GrowMino.\",\n  \"scheduled_for\": \"2026-08-21T10:00:00+05:00\",\n  \"timezone\": \"Asia/Karachi\",\n  \"image_url\": \"\",\n  \"idempotency_key\": \"{{$guid}}\"\n}"
+        },
+        "url": "{{base_url}}/api/v1/posts/linkedin/schedule"
+      }
+    },
+    {
+      "name": "List LinkedIn Jobs",
+      "request": {
+        "method": "GET",
+        "header": [
+          { "key": "X-Growmino-User-Id", "value": "{{user_id}}" },
+          { "key": "X-Growmino-Business-Id", "value": "{{business_id}}" }
+        ],
+        "url": "{{base_url}}/api/v1/posts/linkedin/jobs"
+      }
+    },
+    {
+      "name": "Get Post Status",
+      "request": {
+        "method": "GET",
+        "header": [
+          { "key": "X-Growmino-User-Id", "value": "{{user_id}}" },
+          { "key": "X-Growmino-Business-Id", "value": "{{business_id}}" }
+        ],
+        "url": "{{base_url}}/api/v1/posts/{{post_id}}"
+      }
+    },
+    {
+      "name": "Retry Post",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "X-Growmino-User-Id", "value": "{{user_id}}" },
+          { "key": "X-Growmino-Business-Id", "value": "{{business_id}}" }
+        ],
+        "url": "{{base_url}}/api/v1/posts/{{post_id}}/retry"
+      }
+    },
+    {
+      "name": "Cancel Scheduled Post",
+      "request": {
+        "method": "DELETE",
+        "header": [
+          { "key": "X-Growmino-User-Id", "value": "{{user_id}}" },
+          { "key": "X-Growmino-Business-Id", "value": "{{business_id}}" }
+        ],
+        "url": "{{base_url}}/api/v1/posts/{{post_id}}/schedule"
+      }
+    }
+  ]
+}

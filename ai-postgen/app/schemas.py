@@ -39,6 +39,7 @@ class PlatformEnum(str, Enum):
 class PublishPlatformEnum(str, Enum):
     instagram = "instagram"
     facebook = "facebook"
+    linkedin = "linkedin"
 
 
 class GenerateRequest(BaseModel):
@@ -281,3 +282,78 @@ class UploadImageRequest(BaseModel):
 
 class ErrorResponse(BaseModel):
     detail: str = Field(..., description="Error message")
+
+
+class LinkedInConnectResponse(BaseModel):
+    authorization_url: str
+    expires_in_seconds: int
+
+
+class LinkedInStatusResponse(BaseModel):
+    connected: bool
+    profile_name: str = ""
+    email: str = ""
+    linkedin_sub: str = ""
+    person_urn: str = ""
+    connected_at: str = ""
+    expires_at: str = ""
+
+
+class LinkedInPublishTextRequest(BaseModel):
+    caption: str = Field(..., min_length=1, max_length=3000)
+    idempotency_key: str = ""
+
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+
+class LinkedInPublishImageUrlRequest(BaseModel):
+    caption: str = Field(..., min_length=1, max_length=3000)
+    image_url: str
+    idempotency_key: str = ""
+
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+
+class LinkedInScheduleRequest(BaseModel):
+    caption: str = Field(..., min_length=1, max_length=3000)
+    scheduled_for: str
+    timezone: str = "UTC"
+    image_url: str = ""
+    idempotency_key: str = ""
+
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+
+class LinkedInPostStatus(BaseModel):
+    id: str
+    user_id: str = ""
+    business_id: str = ""
+    platform: str = "linkedin"
+    type: str = "text"
+    status: str
+    caption: str = ""
+    image_url: str = ""
+    image_urns: list[str] = Field(default_factory=list)
+    alt_texts: list[str] = Field(default_factory=list)
+    scheduled_for_utc: str = ""
+    display_timezone: str = ""
+    linkedin_post_id: str = ""
+    error_message: str = ""
+    retry_count: int = 0
+    created_at: str = ""
+    updated_at: str = ""
+
+
+class LinkedInPublishResponse(BaseModel):
+    id: str
+    platform: str = "linkedin"
+    status: str
+    linkedin_post_id: str = ""
+    image_urns: list[str] = Field(default_factory=list)
+    message: str
+    scheduled_for_utc: str = ""
+    display_timezone: str = ""
+
+
+class LinkedInJobsResponse(BaseModel):
+    posts: list[LinkedInPostStatus]

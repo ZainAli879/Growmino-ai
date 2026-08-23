@@ -8,12 +8,18 @@ from pathlib import Path
 from time import perf_counter
 from uuid import uuid4
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import Depends, FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from openai import OpenAIError
 
+from app.auth import AuthContext, require_auth_context
 from app.config import Settings, get_settings
+from app.linkedin_api import router as linkedin_router
+from app.linkedin_client import build_authorization_url, create_state_token, oauth_expiry
+from app.linkedin_store import get_publish_job
+from app.linkedin_store import insert_oauth_state
 from app.openai_clients import generate_caption, generate_content_plan, generate_image
 from app.schemas import (
     ContentPlanResponse,
@@ -22,6 +28,7 @@ from app.schemas import (
     GenerateResponse,
     GeneratedPostSummary,
     GeneratedPostsResponse,
+    LinkedInPostStatus,
     MetaInfo,
     OpenAIImageInfo,
     PublishRequest,
@@ -33,7 +40,6 @@ from app.schemas import (
     WeeklyContentPlanRequest,
 )
 from app.social_publish import publish_to_meta
-from app.supabase_store import get_generated_post, list_generated_posts, persist_generated_post
 from app.utils import append_jsonl, build_public_output_url, ensure_outputs_dir
 from app.validators import (
     heuristic_no_fabricated_numbers_if_no_proof,
@@ -47,7 +53,7 @@ app = FastAPI(title="AI Post Generator", version="1.0.0")
 
 _cors_allow_origins = [
     origin.strip()
-    for origin in os.getenv("CORS_ALLOW_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173").split(",")
+    for origin in os.getenv("CORS_ALLOW_ORIGINS", "").split(",")
     if origin.strip()
 ]
 _outputs_dir = ensure_outputs_dir(os.getenv("OUTPUTS_DIR", "./outputs").strip() or "./outputs")
@@ -59,6 +65,34 @@ app.add_middleware(
     allow_headers=["*"],
 )
 app.mount("/outputs", StaticFiles(directory=_outputs_dir), name="outputs")
+app.include_router(linkedin_router)
+
+
+@app.get("/test-ui", include_in_schema=False)
+async def test_ui() -> FileResponse:
+    return FileResponse(Path(__file__).resolve().parent / "static" / "test-ui.html")
+
+
+@app.get("/test-ui/linkedin/connect", include_in_schema=False)
+async def test_ui_linkedin_connect(
+    user_id: str = Query(default="local-user"),
+    business_id: str = Query(default="local-business"),
+) -> RedirectResponse:
+    try:
+        settings = get_settings()
+        state, state_hash = create_state_token()
+        await asyncio.to_thread(
+            insert_oauth_state,
+            settings,
+            state_hash=state_hash,
+            user_id=user_id.strip() or "local-user",
+            business_id=business_id.strip() or "local-business",
+            expires_at=oauth_expiry(settings),
+            redirect_after=settings.linkedin_frontend_success_url,
+        )
+        return RedirectResponse(build_authorization_url(settings, state))
+    except Exception:
+        return RedirectResponse("/test-ui?linkedin=error")
 
 
 @app.get("/api/v1/health")
@@ -104,42 +138,38 @@ async def create_post_endpoint(payload: GenerateRequest) -> GenerateResponse:
     responses={502: {"model": ErrorResponse}},
 )
 async def list_posts_endpoint(limit: int = Query(default=50, ge=1, le=100)) -> GeneratedPostsResponse:
-    try:
-        settings = get_settings()
-    except Exception as exc:
-        raise HTTPException(status_code=502, detail="Service configuration error.") from exc
-
-    try:
-        posts = await asyncio.to_thread(list_generated_posts, settings, limit)
-    except RuntimeError as exc:
-        raise HTTPException(status_code=502, detail=str(exc)) from exc
-    except Exception as exc:
-        raise HTTPException(status_code=502, detail="Could not load generated posts from Supabase.") from exc
-
-    return GeneratedPostsResponse(posts=posts)
+    return GeneratedPostsResponse(posts=[])
 
 
 @app.get(
     "/api/v1/posts/{post_id}",
-    response_model=GeneratedPostSummary,
+    response_model=GeneratedPostSummary | LinkedInPostStatus,
     responses={404: {"model": ErrorResponse}, 502: {"model": ErrorResponse}},
 )
-async def get_post_endpoint(post_id: str) -> GeneratedPostSummary:
+async def get_post_endpoint(
+    post_id: str,
+    auth: AuthContext = Depends(require_auth_context),
+) -> GeneratedPostSummary | LinkedInPostStatus:
     try:
         settings = get_settings()
     except Exception as exc:
         raise HTTPException(status_code=502, detail="Service configuration error.") from exc
 
     try:
-        post = await asyncio.to_thread(get_generated_post, settings, post_id)
-    except RuntimeError as exc:
-        raise HTTPException(status_code=502, detail=str(exc)) from exc
+        linkedin_post = await asyncio.to_thread(
+            get_publish_job,
+            settings,
+            post_id=post_id,
+            user_id=auth.user_id,
+            business_id=auth.business_id,
+        )
     except Exception as exc:
-        raise HTTPException(status_code=502, detail="Could not load generated post from Supabase.") from exc
+        raise HTTPException(status_code=502, detail="Could not load LinkedIn post.") from exc
 
-    if post is None:
-        raise HTTPException(status_code=404, detail="Generated post not found.")
-    return post
+    if linkedin_post is not None:
+        return linkedin_post
+
+    raise HTTPException(status_code=404, detail="Post not found.")
 
 
 @app.post(
@@ -155,7 +185,7 @@ async def create_content_plan_endpoint(payload: WeeklyContentPlanRequest) -> Con
 
     plan_id = str(uuid4())
     try:
-        recent_posts = await asyncio.to_thread(_recent_posts_context, settings)
+        recent_posts = "none"
         plan = await asyncio.wait_for(
             asyncio.to_thread(generate_content_plan, payload, settings, plan_id, recent_posts),
             timeout=settings.request_timeout_seconds,
@@ -300,25 +330,6 @@ async def _run_generation(payload: GenerateRequest, settings: Settings) -> Gener
     )
 
     local_public_url = f"/outputs/{build_public_output_url(image_result.file_path)}"
-    try:
-        persisted = await asyncio.to_thread(
-            persist_generated_post,
-            payload=payload,
-            settings=settings,
-            caption=caption_result.caption,
-            headline=caption_result.headline,
-            image_model=image_result.model,
-            image_size=image_result.size,
-            image_prompt=image_result.prompt_used,
-            image_file_path=image_result.file_path,
-            fallback_public_url=local_public_url,
-            alt_text=image_result.alt_text,
-            qa=qa,
-            trace=trace,
-        )
-    except Exception as exc:
-        raise RuntimeError("Could not save generated post to Supabase.") from exc
-
     append_jsonl(
         settings.traces_file,
         {
@@ -344,13 +355,13 @@ async def _run_generation(payload: GenerateRequest, settings: Settings) -> Gener
             "model": image_result.model,
             "text_provider": settings.text_provider,
             "text_model": text_model,
-            "supabase_post_id": persisted.post_id,
-            "public_image_url": persisted.image_url,
+            "post_id": trace_id,
+            "public_image_url": local_public_url,
         },
     )
 
     response = GenerateResponse(
-        post_id=persisted.post_id,
+        post_id=trace_id,
         meta=MetaInfo(
             platform=payload.platform,
             day=payload.day,
@@ -366,30 +377,13 @@ async def _run_generation(payload: GenerateRequest, settings: Settings) -> Gener
             prompt_used=image_result.prompt_used,
             negative_prompt_used=image_result.negative_prompt_used,
             file_path=image_result.file_path,
-            public_url=persisted.image_url or local_public_url,
+            public_url=local_public_url,
             alt_text=image_result.alt_text,
         ),
         qa=qa,
         trace=trace,
     )
     return response
-
-
-def _recent_posts_context(settings: Settings, limit: int = 12) -> str:
-    try:
-        posts = list_generated_posts(settings, limit)
-    except Exception:
-        return "none"
-
-    lines: list[str] = []
-    for idx, post in enumerate(posts, start=1):
-        topic = post.topic or post.headline or "untitled"
-        caption_preview = " ".join((post.caption or "").split())[:180]
-        lines.append(
-            f"{idx}. {post.platform} {post.day} {post.content_type}: "
-            f"{topic} | {post.headline} | {caption_preview}"
-        )
-    return "\n".join(lines) if lines else "none"
 
 
 async def _generate_posts_for_plan(

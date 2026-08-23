@@ -28,23 +28,6 @@ class Settings:
     facebook_image_size: str = "1200x630"
     outputs_dir: str = "./outputs"
     traces_file: str = "./outputs/traces/generation-traces.jsonl"
-    database_url: str = ""
-    supabase_url: str = ""
-    supabase_secret_key: str = ""
-    supabase_storage_bucket: str = ""
-    google_credentials_json_path: str = ""
-    google_auth_mode: str = "service_account"
-    google_oauth_client_json_path: str = ""
-    google_oauth_token_path: str = "oauth-token.json"
-    google_sheets_auth_mode: str = ""
-    google_drive_auth_mode: str = ""
-    google_sheets_oauth_client_json_path: str = ""
-    google_drive_oauth_client_json_path: str = ""
-    google_sheets_oauth_token_path: str = "oauth-token-sheets.json"
-    google_drive_oauth_token_path: str = "oauth-token-drive.json"
-    google_spreadsheet_id: str = ""
-    google_sheet_name: str = "Sheet1"
-    google_drive_folder_id: str = ""
     default_company_logo_path: str = ""
     logo_input_mode: str = "overlay"
     meta_graph_api_version: str = "v25.0"
@@ -53,7 +36,23 @@ class Settings:
     facebook_access_token: str = ""
     instagram_business_account_id: str = ""
     instagram_access_token: str = ""
-    cors_allow_origins: tuple[str, ...] = ("http://localhost:5173", "http://127.0.0.1:5173")
+    api_auth_required: bool = False
+    growmino_jwt_secret: str = ""
+    auth_dev_user_id: str = "local-user"
+    auth_dev_business_id: str = "local-business"
+    linkedin_client_id: str = ""
+    linkedin_client_secret: str = ""
+    linkedin_redirect_uri: str = "http://localhost:8000/api/v1/integrations/linkedin/callback"
+    linkedin_frontend_success_url: str = "http://localhost:8000/test-ui?linkedin=connected"
+    linkedin_frontend_error_url: str = "http://localhost:8000/test-ui?linkedin=error"
+    linkedin_oauth_state_ttl_seconds: int = 600
+    token_encryption_key: str = ""
+    linkedin_max_image_bytes: int = 5_000_000
+    linkedin_request_timeout_seconds: int = 30
+    linkedin_user_agent: str = "GrowMino-AI/1.0"
+    linkedin_store_file: str = "./outputs/linkedin_store.json"
+    linkedin_rest_version: str = "202608"
+    cors_allow_origins: tuple[str, ...] = ()
 
     def image_size_for_platform(self, platform: str) -> str:
         platform_key = (platform or "").strip().lower()
@@ -106,26 +105,6 @@ def get_settings() -> Settings:
     facebook_image_size = os.getenv("FACEBOOK_IMAGE_SIZE", "1200x630").strip() or "1200x630"
     outputs_dir = os.getenv("OUTPUTS_DIR", "./outputs").strip() or "./outputs"
     traces_file = os.getenv("TRACES_FILE", "./outputs/traces/generation-traces.jsonl").strip() or "./outputs/traces/generation-traces.jsonl"
-    database_url = os.getenv("DATABASE_URL", "").strip()
-    supabase_url = os.getenv("SUPABASE_URL", "").strip().rstrip("/")
-    supabase_secret_key = (
-        os.getenv("SUPABASE_SERVICE_ROLE_KEY", "").strip()
-        or os.getenv("SUPABASE_SECRET_KEY", "").strip()
-    )
-    supabase_storage_bucket = os.getenv("SUPABASE_STORAGE_BUCKET", "").strip()
-    google_credentials_json_path = os.getenv("GOOGLE_CREDENTIALS_JSON_PATH", "").strip()
-    google_auth_mode = os.getenv("GOOGLE_AUTH_MODE", "service_account").strip().lower() or "service_account"
-    google_oauth_client_json_path = os.getenv("GOOGLE_OAUTH_CLIENT_JSON_PATH", "").strip()
-    google_oauth_token_path = os.getenv("GOOGLE_OAUTH_TOKEN_PATH", "oauth-token.json").strip() or "oauth-token.json"
-    google_sheets_auth_mode = os.getenv("GOOGLE_SHEETS_AUTH_MODE", "").strip().lower()
-    google_drive_auth_mode = os.getenv("GOOGLE_DRIVE_AUTH_MODE", "").strip().lower()
-    google_sheets_oauth_client_json_path = os.getenv("GOOGLE_SHEETS_OAUTH_CLIENT_JSON_PATH", "").strip()
-    google_drive_oauth_client_json_path = os.getenv("GOOGLE_DRIVE_OAUTH_CLIENT_JSON_PATH", "").strip()
-    google_sheets_oauth_token_path = os.getenv("GOOGLE_SHEETS_OAUTH_TOKEN_PATH", "oauth-token-sheets.json").strip() or "oauth-token-sheets.json"
-    google_drive_oauth_token_path = os.getenv("GOOGLE_DRIVE_OAUTH_TOKEN_PATH", "oauth-token-drive.json").strip() or "oauth-token-drive.json"
-    google_spreadsheet_id = os.getenv("GOOGLE_SPREADSHEET_ID", "").strip()
-    google_sheet_name = os.getenv("GOOGLE_SHEET_NAME", "Sheet1").strip() or "Sheet1"
-    google_drive_folder_id = os.getenv("GOOGLE_DRIVE_FOLDER_ID", "").strip()
     default_company_logo_path = os.getenv("DEFAULT_COMPANY_LOGO_PATH", "").strip()
     logo_input_mode = os.getenv("LOGO_INPUT_MODE", "overlay").strip().lower() or "overlay"
     meta_graph_api_version = os.getenv("META_GRAPH_API_VERSION", "v25.0").strip() or "v25.0"
@@ -134,7 +113,35 @@ def get_settings() -> Settings:
     facebook_access_token = os.getenv("FACEBOOK_ACCESS_TOKEN", "").strip()
     instagram_business_account_id = os.getenv("INSTAGRAM_BUSINESS_ACCOUNT_ID", "").strip()
     instagram_access_token = os.getenv("INSTAGRAM_ACCESS_TOKEN", "").strip()
-    raw_cors_allow_origins = os.getenv("CORS_ALLOW_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173").strip()
+    api_auth_required = os.getenv("API_AUTH_REQUIRED", "false").strip().lower() in {"1", "true", "yes", "on"}
+    growmino_jwt_secret = os.getenv("GROWMINO_JWT_SECRET", "").strip()
+    auth_dev_user_id = os.getenv("AUTH_DEV_USER_ID", "local-user").strip() or "local-user"
+    auth_dev_business_id = os.getenv("AUTH_DEV_BUSINESS_ID", "local-business").strip() or "local-business"
+    linkedin_client_id = os.getenv("LINKEDIN_CLIENT_ID", "").strip()
+    linkedin_client_secret = os.getenv("LINKEDIN_CLIENT_SECRET", "").strip()
+    linkedin_redirect_uri = (
+        os.getenv("LINKEDIN_REDIRECT_URI", "http://localhost:8000/api/v1/integrations/linkedin/callback").strip()
+        or "http://localhost:8000/api/v1/integrations/linkedin/callback"
+    )
+    linkedin_frontend_success_url = (
+        os.getenv("LINKEDIN_FRONTEND_SUCCESS_URL", "http://localhost:8000/test-ui?linkedin=connected").strip()
+        or "http://localhost:8000/test-ui?linkedin=connected"
+    )
+    linkedin_frontend_error_url = (
+        os.getenv("LINKEDIN_FRONTEND_ERROR_URL", "http://localhost:8000/test-ui?linkedin=error").strip()
+        or "http://localhost:8000/test-ui?linkedin=error"
+    )
+    linkedin_oauth_state_ttl_seconds = int(os.getenv("LINKEDIN_OAUTH_STATE_TTL_SECONDS", "600").strip() or "600")
+    token_encryption_key = os.getenv("TOKEN_ENCRYPTION_KEY", "").strip()
+    linkedin_max_image_bytes = int(os.getenv("LINKEDIN_MAX_IMAGE_BYTES", "5000000").strip() or "5000000")
+    linkedin_request_timeout_seconds = int(os.getenv("LINKEDIN_REQUEST_TIMEOUT_SECONDS", "30").strip() or "30")
+    linkedin_user_agent = os.getenv("LINKEDIN_USER_AGENT", "GrowMino-AI/1.0").strip() or "GrowMino-AI/1.0"
+    linkedin_store_file = os.getenv("LINKEDIN_STORE_FILE", "./outputs/linkedin_store.json").strip() or "./outputs/linkedin_store.json"
+    linkedin_rest_version = os.getenv("LINKEDIN_REST_VERSION", "202608").strip() or "202608"
+    raw_cors_allow_origins = os.getenv(
+        "CORS_ALLOW_ORIGINS",
+        "",
+    ).strip()
     cors_allow_origins = tuple(origin.strip() for origin in raw_cors_allow_origins.split(",") if origin.strip())
     if logo_input_mode not in {"overlay", "reference", "both"}:
         raise RuntimeError("LOGO_INPUT_MODE must be one of: overlay, reference, both.")
@@ -160,23 +167,6 @@ def get_settings() -> Settings:
         facebook_image_size=facebook_image_size,
         outputs_dir=outputs_dir,
         traces_file=traces_file,
-        database_url=database_url,
-        supabase_url=supabase_url,
-        supabase_secret_key=supabase_secret_key,
-        supabase_storage_bucket=supabase_storage_bucket,
-        google_credentials_json_path=google_credentials_json_path,
-        google_auth_mode=google_auth_mode,
-        google_oauth_client_json_path=google_oauth_client_json_path,
-        google_oauth_token_path=google_oauth_token_path,
-        google_sheets_auth_mode=google_sheets_auth_mode,
-        google_drive_auth_mode=google_drive_auth_mode,
-        google_sheets_oauth_client_json_path=google_sheets_oauth_client_json_path,
-        google_drive_oauth_client_json_path=google_drive_oauth_client_json_path,
-        google_sheets_oauth_token_path=google_sheets_oauth_token_path,
-        google_drive_oauth_token_path=google_drive_oauth_token_path,
-        google_spreadsheet_id=google_spreadsheet_id,
-        google_sheet_name=google_sheet_name,
-        google_drive_folder_id=google_drive_folder_id,
         default_company_logo_path=default_company_logo_path,
         logo_input_mode=logo_input_mode,
         meta_graph_api_version=meta_graph_api_version,
@@ -185,5 +175,21 @@ def get_settings() -> Settings:
         facebook_access_token=facebook_access_token,
         instagram_business_account_id=instagram_business_account_id,
         instagram_access_token=instagram_access_token,
+        api_auth_required=api_auth_required,
+        growmino_jwt_secret=growmino_jwt_secret,
+        auth_dev_user_id=auth_dev_user_id,
+        auth_dev_business_id=auth_dev_business_id,
+        linkedin_client_id=linkedin_client_id,
+        linkedin_client_secret=linkedin_client_secret,
+        linkedin_redirect_uri=linkedin_redirect_uri,
+        linkedin_frontend_success_url=linkedin_frontend_success_url,
+        linkedin_frontend_error_url=linkedin_frontend_error_url,
+        linkedin_oauth_state_ttl_seconds=linkedin_oauth_state_ttl_seconds,
+        token_encryption_key=token_encryption_key,
+        linkedin_max_image_bytes=linkedin_max_image_bytes,
+        linkedin_request_timeout_seconds=linkedin_request_timeout_seconds,
+        linkedin_user_agent=linkedin_user_agent,
+        linkedin_store_file=linkedin_store_file,
+        linkedin_rest_version=linkedin_rest_version,
         cors_allow_origins=cors_allow_origins,
     )
