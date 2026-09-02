@@ -1,0 +1,184 @@
+{
+  "info": {
+    "name": "GrowMino Social Publishing API",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "base_url", "value": "http://localhost:8000" },
+    { "key": "user_id", "value": "local-user" },
+    { "key": "business_id", "value": "local-business" },
+    { "key": "fb_page_id", "value": "" },
+    { "key": "fb_page_token", "value": "" },
+    { "key": "ig_account_id", "value": "" },
+    { "key": "ig_access_token", "value": "" },
+    { "key": "public_image_url", "value": "https://placehold.co/1080x1080.jpg?text=GrowMino+Test" }
+  ],
+  "item": [
+    {
+      "name": "Facebook Text",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "X-Growmino-User-Id", "value": "{{user_id}}" },
+          { "key": "X-Growmino-Business-Id", "value": "{{business_id}}" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"page_id\": \"{{fb_page_id}}\",\n  \"page_access_token\": \"{{fb_page_token}}\",\n  \"caption\": \"Testing Facebook text publishing from GrowMino.\",\n  \"idempotency_key\": \"{{$guid}}\"\n}"
+        },
+        "url": "{{base_url}}/api/v1/social/facebook/posts/text"
+      }
+    },
+    {
+      "name": "Facebook Image URL",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "X-Growmino-User-Id", "value": "{{user_id}}" },
+          { "key": "X-Growmino-Business-Id", "value": "{{business_id}}" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"page_id\": \"{{fb_page_id}}\",\n  \"page_access_token\": \"{{fb_page_token}}\",\n  \"caption\": \"Testing Facebook image publishing from GrowMino.\",\n  \"image_url\": \"{{public_image_url}}\",\n  \"idempotency_key\": \"{{$guid}}\"\n}"
+        },
+        "url": "{{base_url}}/api/v1/social/facebook/posts/image-url"
+      }
+    },
+    {
+      "name": "Facebook Image Upload",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "X-Growmino-User-Id", "value": "{{user_id}}" },
+          { "key": "X-Growmino-Business-Id", "value": "{{business_id}}" }
+        ],
+        "body": {
+          "mode": "formdata",
+          "formdata": [
+            { "key": "page_id", "value": "{{fb_page_id}}", "type": "text" },
+            { "key": "page_access_token", "value": "{{fb_page_token}}", "type": "text" },
+            { "key": "caption", "value": "Testing uploaded Facebook image from GrowMino.", "type": "text" },
+            { "key": "idempotency_key", "value": "{{$guid}}", "type": "text" },
+            { "key": "file", "type": "file", "src": [] }
+          ]
+        },
+        "url": "{{base_url}}/api/v1/social/facebook/posts/image"
+      }
+    },
+    {
+      "name": "Facebook Multi-Image URL",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "X-Growmino-User-Id", "value": "{{user_id}}" },
+          { "key": "X-Growmino-Business-Id", "value": "{{business_id}}" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"page_id\": \"{{fb_page_id}}\",\n  \"page_access_token\": \"{{fb_page_token}}\",\n  \"caption\": \"Testing Facebook multi-image publishing from GrowMino.\",\n  \"image_urls\": [\"{{public_image_url}}\", \"{{public_image_url}}\"],\n  \"idempotency_key\": \"{{$guid}}\"\n}"
+        },
+        "url": "{{base_url}}/api/v1/social/facebook/posts/multi-image-url"
+      }
+    },
+    {
+      "name": "Facebook Multi-Image Upload",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "X-Growmino-User-Id", "value": "{{user_id}}" },
+          { "key": "X-Growmino-Business-Id", "value": "{{business_id}}" }
+        ],
+        "body": {
+          "mode": "formdata",
+          "formdata": [
+            { "key": "page_id", "value": "{{fb_page_id}}", "type": "text" },
+            { "key": "page_access_token", "value": "{{fb_page_token}}", "type": "text" },
+            { "key": "caption", "value": "Testing uploaded Facebook multi-image post.", "type": "text" },
+            { "key": "idempotency_key", "value": "{{$guid}}", "type": "text" },
+            { "key": "images", "type": "file", "src": [] },
+            { "key": "images", "type": "file", "src": [] }
+          ]
+        },
+        "url": "{{base_url}}/api/v1/social/facebook/posts/multi-image"
+      }
+    },
+    {
+      "name": "Instagram Image URL",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "X-Growmino-User-Id", "value": "{{user_id}}" },
+          { "key": "X-Growmino-Business-Id", "value": "{{business_id}}" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"instagram_business_account_id\": \"{{ig_account_id}}\",\n  \"instagram_access_token\": \"{{ig_access_token}}\",\n  \"caption\": \"Testing Instagram publishing from GrowMino.\",\n  \"image_url\": \"{{public_image_url}}\",\n  \"idempotency_key\": \"{{$guid}}\"\n}"
+        },
+        "url": "{{base_url}}/api/v1/social/instagram/posts/image-url"
+      }
+    },
+    {
+      "name": "Instagram Image Upload",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "X-Growmino-User-Id", "value": "{{user_id}}" },
+          { "key": "X-Growmino-Business-Id", "value": "{{business_id}}" }
+        ],
+        "body": {
+          "mode": "formdata",
+          "formdata": [
+            { "key": "instagram_business_account_id", "value": "{{ig_account_id}}", "type": "text" },
+            { "key": "instagram_access_token", "value": "{{ig_access_token}}", "type": "text" },
+            { "key": "caption", "value": "Testing uploaded Instagram image from GrowMino.", "type": "text" },
+            { "key": "idempotency_key", "value": "{{$guid}}", "type": "text" },
+            { "key": "file", "type": "file", "src": [] }
+          ]
+        },
+        "url": "{{base_url}}/api/v1/social/instagram/posts/image"
+      }
+    },
+    {
+      "name": "Instagram Carousel URL",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "X-Growmino-User-Id", "value": "{{user_id}}" },
+          { "key": "X-Growmino-Business-Id", "value": "{{business_id}}" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"instagram_business_account_id\": \"{{ig_account_id}}\",\n  \"instagram_access_token\": \"{{ig_access_token}}\",\n  \"caption\": \"Testing Instagram carousel publishing from GrowMino.\",\n  \"image_urls\": [\"{{public_image_url}}\", \"{{public_image_url}}\"],\n  \"idempotency_key\": \"{{$guid}}\"\n}"
+        },
+        "url": "{{base_url}}/api/v1/social/instagram/posts/carousel-url"
+      }
+    },
+    {
+      "name": "Instagram Carousel Upload",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "X-Growmino-User-Id", "value": "{{user_id}}" },
+          { "key": "X-Growmino-Business-Id", "value": "{{business_id}}" }
+        ],
+        "body": {
+          "mode": "formdata",
+          "formdata": [
+            { "key": "instagram_business_account_id", "value": "{{ig_account_id}}", "type": "text" },
+            { "key": "instagram_access_token", "value": "{{ig_access_token}}", "type": "text" },
+            { "key": "caption", "value": "Testing uploaded Instagram carousel from GrowMino.", "type": "text" },
+            { "key": "idempotency_key", "value": "{{$guid}}", "type": "text" },
+            { "key": "images", "type": "file", "src": [] },
+            { "key": "images", "type": "file", "src": [] }
+          ]
+        },
+        "url": "{{base_url}}/api/v1/social/instagram/posts/carousel"
+      }
+    }
+  ]
+}

@@ -59,7 +59,7 @@ async def require_auth_context(
 
     user_id = (x_growmino_user_id or "").strip()
     business_id = (x_growmino_business_id or "").strip()
-    if user_id and business_id:
+    if user_id and business_id and settings.allow_dev_auth_headers:
         return AuthContext(user_id=user_id, business_id=business_id)
 
     if not settings.api_auth_required:

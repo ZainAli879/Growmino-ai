@@ -151,6 +151,10 @@ class ContentPlanItem(BaseModel):
     generated_caption: str = ""
     generated_headline: str = ""
     generated_image_url: str = ""
+    generated_image_data_url: str = ""
+    generated_image_base64: str = ""
+    generated_image_mime_type: str = ""
+    generated_alt_text: str = ""
     generation_error: str = ""
 
 
@@ -162,6 +166,35 @@ class ContentPlanResponse(BaseModel):
     theme: str
     total_posts: int
     items: list[ContentPlanItem]
+
+
+class PublicContentPlanPost(BaseModel):
+    position: int
+    post_id: str = ""
+    status: str
+    platform: PlatformEnum
+    day: DayEnum
+    content_type: ContentTypeEnum
+    business_name: str
+    topic: str
+    caption: str = ""
+    headline: str = ""
+    image_url: str = ""
+    image_base64: str = ""
+    image_data_url: str = ""
+    image_mime_type: str = ""
+    alt_text: str = ""
+    error: str = ""
+
+
+class PublicContentPlanResponse(BaseModel):
+    plan_id: str
+    status: str
+    week_start_date: str = ""
+    weekly_goal: str
+    theme: str
+    total_posts: int
+    posts: list[PublicContentPlanPost]
 
 
 class MetaInfo(BaseModel):
@@ -179,6 +212,9 @@ class OpenAIImageInfo(BaseModel):
     negative_prompt_used: str
     file_path: str
     public_url: str = ""
+    image_data_url: str = ""
+    image_base64: str = ""
+    image_mime_type: str = "image/png"
     alt_text: str
 
 
@@ -214,6 +250,22 @@ class GenerateResponse(BaseModel):
     openai_image: OpenAIImageInfo
     qa: QAInfo | None = None
     trace: TraceInfo | None = None
+
+
+class PublicGenerateResponse(BaseModel):
+    post_id: str
+    status: str = "generated"
+    platform: PlatformEnum
+    day: DayEnum
+    content_type: ContentTypeEnum
+    business_name: str
+    caption: str
+    headline: str
+    image_url: str = ""
+    image_base64: str
+    image_data_url: str
+    image_mime_type: str = "image/png"
+    alt_text: str = ""
 
 
 class GeneratedPostSummary(BaseModel):
@@ -266,6 +318,58 @@ class PublishResponse(BaseModel):
     message: str = ""
     image_url_used: str = ""
     drive_image_url: str = ""
+    image_urls_used: list[str] = Field(default_factory=list)
+    child_creation_ids: list[str] = Field(default_factory=list)
+    photo_ids: list[str] = Field(default_factory=list)
+
+
+class FacebookTextPublishRequest(BaseModel):
+    page_id: str = Field(..., min_length=1)
+    page_access_token: str = Field(..., min_length=1)
+    caption: str = Field(..., min_length=1, max_length=63206)
+    idempotency_key: str = ""
+
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+
+class FacebookImageUrlPublishRequest(BaseModel):
+    page_id: str = Field(..., min_length=1)
+    page_access_token: str = Field(..., min_length=1)
+    caption: str = Field(..., min_length=1, max_length=63206)
+    image_url: str = Field(..., min_length=1)
+    idempotency_key: str = ""
+
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+
+class FacebookMultiImageUrlPublishRequest(BaseModel):
+    page_id: str = Field(..., min_length=1)
+    page_access_token: str = Field(..., min_length=1)
+    caption: str = Field(..., min_length=1, max_length=63206)
+    image_urls: list[str] = Field(..., min_length=2, max_length=20)
+    idempotency_key: str = ""
+
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+
+class InstagramImageUrlPublishRequest(BaseModel):
+    instagram_business_account_id: str = Field(..., min_length=1)
+    instagram_access_token: str = Field(..., min_length=1)
+    caption: str = Field(..., min_length=1, max_length=2200)
+    image_url: str = Field(..., min_length=1)
+    idempotency_key: str = ""
+
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+
+class InstagramCarouselUrlPublishRequest(BaseModel):
+    instagram_business_account_id: str = Field(..., min_length=1)
+    instagram_access_token: str = Field(..., min_length=1)
+    caption: str = Field(..., min_length=1, max_length=2200)
+    image_urls: list[str] = Field(..., min_length=2, max_length=10)
+    idempotency_key: str = ""
+
+    model_config = ConfigDict(str_strip_whitespace=True)
 
 
 class UploadImageResponse(BaseModel):
@@ -280,8 +384,16 @@ class UploadImageRequest(BaseModel):
     model_config = ConfigDict(str_strip_whitespace=True)
 
 
+class ErrorBody(BaseModel):
+    code: str
+    message: str
+    request_id: str = ""
+
+
 class ErrorResponse(BaseModel):
-    detail: str = Field(..., description="Error message")
+    detail: str = Field(..., description="Backward-compatible error message")
+    request_id: str = ""
+    error: ErrorBody | None = None
 
 
 class LinkedInConnectResponse(BaseModel):

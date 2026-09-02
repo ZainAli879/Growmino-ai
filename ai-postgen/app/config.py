@@ -8,6 +8,7 @@ from dotenv import load_dotenv
 
 @dataclass(frozen=True)
 class Settings:
+    environment: str = "development"
     openai_api_key: str = ""
     openrouter_api_key: str = ""
     port: int = 8000
@@ -38,6 +39,7 @@ class Settings:
     instagram_access_token: str = ""
     api_auth_required: bool = False
     growmino_jwt_secret: str = ""
+    allow_dev_auth_headers: bool = True
     auth_dev_user_id: str = "local-user"
     auth_dev_business_id: str = "local-business"
     linkedin_client_id: str = ""
@@ -52,7 +54,21 @@ class Settings:
     linkedin_user_agent: str = "GrowMino-AI/1.0"
     linkedin_store_file: str = "./outputs/linkedin_store.json"
     linkedin_rest_version: str = "202608"
+    public_base_url: str = ""
+    social_max_image_bytes: int = 10_000_000
     cors_allow_origins: tuple[str, ...] = ()
+    expose_test_ui: bool = True
+    expose_api_docs: bool = True
+    expose_outputs: bool = False
+    api_max_body_bytes: int = 25_000_000
+    api_rate_limit_enabled: bool = True
+    api_rate_limit_requests: int = 120
+    api_rate_limit_window_seconds: int = 60
+    api_generation_rate_limit_requests: int = 10
+    api_generation_rate_limit_window_seconds: int = 3600
+    api_publish_rate_limit_requests: int = 60
+    api_publish_rate_limit_window_seconds: int = 60
+    secure_hsts_enabled: bool = False
 
     def image_size_for_platform(self, platform: str) -> str:
         platform_key = (platform or "").strip().lower()
@@ -68,6 +84,7 @@ class Settings:
 def get_settings() -> Settings:
     load_dotenv()
 
+    environment = os.getenv("ENVIRONMENT", "development").strip().lower() or "development"
     openai_api_key = os.getenv("OPENAI_API_KEY", "").strip()
     text_provider = os.getenv("TEXT_PROVIDER", "openai").strip().lower() or "openai"
     caption_model = os.getenv("CAPTION_MODEL", "gpt-4o-mini").strip() or "gpt-4o-mini"
@@ -115,6 +132,12 @@ def get_settings() -> Settings:
     instagram_access_token = os.getenv("INSTAGRAM_ACCESS_TOKEN", "").strip()
     api_auth_required = os.getenv("API_AUTH_REQUIRED", "false").strip().lower() in {"1", "true", "yes", "on"}
     growmino_jwt_secret = os.getenv("GROWMINO_JWT_SECRET", "").strip()
+    allow_dev_auth_headers_value = os.getenv("ALLOW_DEV_AUTH_HEADERS", "").strip().lower()
+    allow_dev_auth_headers = (
+        allow_dev_auth_headers_value in {"1", "true", "yes", "on"}
+        if allow_dev_auth_headers_value
+        else environment != "production"
+    )
     auth_dev_user_id = os.getenv("AUTH_DEV_USER_ID", "local-user").strip() or "local-user"
     auth_dev_business_id = os.getenv("AUTH_DEV_BUSINESS_ID", "local-business").strip() or "local-business"
     linkedin_client_id = os.getenv("LINKEDIN_CLIENT_ID", "").strip()
@@ -138,6 +161,30 @@ def get_settings() -> Settings:
     linkedin_user_agent = os.getenv("LINKEDIN_USER_AGENT", "GrowMino-AI/1.0").strip() or "GrowMino-AI/1.0"
     linkedin_store_file = os.getenv("LINKEDIN_STORE_FILE", "./outputs/linkedin_store.json").strip() or "./outputs/linkedin_store.json"
     linkedin_rest_version = os.getenv("LINKEDIN_REST_VERSION", "202608").strip() or "202608"
+    public_base_url = os.getenv("PUBLIC_BASE_URL", "").strip().rstrip("/")
+    social_max_image_bytes = int(os.getenv("SOCIAL_MAX_IMAGE_BYTES", "10000000").strip() or "10000000")
+    expose_test_ui_value = os.getenv("EXPOSE_TEST_UI", "").strip().lower()
+    expose_test_ui = (
+        expose_test_ui_value in {"1", "true", "yes", "on"}
+        if expose_test_ui_value
+        else environment != "production"
+    )
+    expose_api_docs_value = os.getenv("EXPOSE_API_DOCS", "").strip().lower()
+    expose_api_docs = (
+        expose_api_docs_value in {"1", "true", "yes", "on"}
+        if expose_api_docs_value
+        else environment != "production"
+    )
+    expose_outputs = os.getenv("EXPOSE_OUTPUTS", "false").strip().lower() in {"1", "true", "yes", "on"}
+    api_max_body_bytes = int(os.getenv("API_MAX_BODY_BYTES", "25000000").strip() or "25000000")
+    api_rate_limit_enabled = os.getenv("API_RATE_LIMIT_ENABLED", "true").strip().lower() in {"1", "true", "yes", "on"}
+    api_rate_limit_requests = int(os.getenv("API_RATE_LIMIT_REQUESTS", "120").strip() or "120")
+    api_rate_limit_window_seconds = int(os.getenv("API_RATE_LIMIT_WINDOW_SECONDS", "60").strip() or "60")
+    api_generation_rate_limit_requests = int(os.getenv("API_GENERATION_RATE_LIMIT_REQUESTS", "10").strip() or "10")
+    api_generation_rate_limit_window_seconds = int(os.getenv("API_GENERATION_RATE_LIMIT_WINDOW_SECONDS", "3600").strip() or "3600")
+    api_publish_rate_limit_requests = int(os.getenv("API_PUBLISH_RATE_LIMIT_REQUESTS", "60").strip() or "60")
+    api_publish_rate_limit_window_seconds = int(os.getenv("API_PUBLISH_RATE_LIMIT_WINDOW_SECONDS", "60").strip() or "60")
+    secure_hsts_enabled = os.getenv("SECURE_HSTS_ENABLED", "false").strip().lower() in {"1", "true", "yes", "on"}
     raw_cors_allow_origins = os.getenv(
         "CORS_ALLOW_ORIGINS",
         "",
@@ -145,8 +192,27 @@ def get_settings() -> Settings:
     cors_allow_origins = tuple(origin.strip() for origin in raw_cors_allow_origins.split(",") if origin.strip())
     if logo_input_mode not in {"overlay", "reference", "both"}:
         raise RuntimeError("LOGO_INPUT_MODE must be one of: overlay, reference, both.")
+    if environment == "production":
+        if not api_auth_required:
+            raise RuntimeError("API_AUTH_REQUIRED must be true in production.")
+        if allow_dev_auth_headers:
+            raise RuntimeError("ALLOW_DEV_AUTH_HEADERS must be false in production.")
+        if len(growmino_jwt_secret) < 32:
+            raise RuntimeError("GROWMINO_JWT_SECRET must be at least 32 characters in production.")
+        if not cors_allow_origins:
+            raise RuntimeError("CORS_ALLOW_ORIGINS must include explicit frontend origins in production.")
+        if public_base_url and not public_base_url.startswith("https://"):
+            raise RuntimeError("PUBLIC_BASE_URL must use HTTPS in production.")
+        if expose_outputs:
+            raise RuntimeError("EXPOSE_OUTPUTS must be false in production.")
+        if linkedin_client_id or linkedin_client_secret:
+            if not linkedin_client_id or not linkedin_client_secret or not token_encryption_key:
+                raise RuntimeError("LinkedIn production configuration requires client id, client secret, and TOKEN_ENCRYPTION_KEY.")
+            if not linkedin_redirect_uri.startswith("https://"):
+                raise RuntimeError("LINKEDIN_REDIRECT_URI must use HTTPS in production.")
 
     return Settings(
+        environment=environment,
         openai_api_key=openai_api_key,
         openrouter_api_key=openrouter_api_key,
         port=port,
@@ -177,6 +243,7 @@ def get_settings() -> Settings:
         instagram_access_token=instagram_access_token,
         api_auth_required=api_auth_required,
         growmino_jwt_secret=growmino_jwt_secret,
+        allow_dev_auth_headers=allow_dev_auth_headers,
         auth_dev_user_id=auth_dev_user_id,
         auth_dev_business_id=auth_dev_business_id,
         linkedin_client_id=linkedin_client_id,
@@ -191,5 +258,19 @@ def get_settings() -> Settings:
         linkedin_user_agent=linkedin_user_agent,
         linkedin_store_file=linkedin_store_file,
         linkedin_rest_version=linkedin_rest_version,
+        public_base_url=public_base_url,
+        social_max_image_bytes=social_max_image_bytes,
         cors_allow_origins=cors_allow_origins,
+        expose_test_ui=expose_test_ui,
+        expose_api_docs=expose_api_docs,
+        expose_outputs=expose_outputs,
+        api_max_body_bytes=api_max_body_bytes,
+        api_rate_limit_enabled=api_rate_limit_enabled,
+        api_rate_limit_requests=api_rate_limit_requests,
+        api_rate_limit_window_seconds=api_rate_limit_window_seconds,
+        api_generation_rate_limit_requests=api_generation_rate_limit_requests,
+        api_generation_rate_limit_window_seconds=api_generation_rate_limit_window_seconds,
+        api_publish_rate_limit_requests=api_publish_rate_limit_requests,
+        api_publish_rate_limit_window_seconds=api_publish_rate_limit_window_seconds,
+        secure_hsts_enabled=secure_hsts_enabled,
     )

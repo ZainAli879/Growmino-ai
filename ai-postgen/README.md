@@ -8,7 +8,7 @@ This codebase intentionally does not include a frontend, Streamlit app, Supabase
 
 - AI caption + image generation with OpenAI or OpenRouter
 - Weekly content plan generation with automatic post generation
-- Local output image serving from `/outputs`
+- Generated images returned as base64/data URLs for product-side storage
 - Meta publishing for Facebook and Instagram using public image URLs
 - LinkedIn personal-profile OAuth
 - LinkedIn personal-profile text publishing
@@ -16,7 +16,7 @@ This codebase intentionally does not include a frontend, Streamlit app, Supabase
 - LinkedIn image URL publishing
 - LinkedIn scheduling through the GrowMino worker
 - API documentation and Postman collection for web-team handoff
-- Temporary backend-served test UI at `/test-ui`
+- Production guardrails: request IDs, consistent errors, body-size limits, rate limits, security headers, explicit CORS, and production config validation
 
 ## Project Structure
 
@@ -34,20 +34,20 @@ ai-postgen/
     openai_clients.py
     prompt_library.py
     schemas.py
+    social_api.py
     social_publish.py
-    static/test-ui.html
     utils.py
     validators.py
   docs/
     api_endpoints.md
     linkedin_personal_profile_integration.md
     GrowMino_LinkedIn_Personal_Profile_Postman_Collection.json
-  scripts/
-    process_linkedin_jobs.py
-    run_golden_smoke.py
+    GrowMino_Social_Publishing_Postman_Collection.json
   tests/
-    golden_requests.json
-    test_linkedin_client.py
+    test_api_security.py
+    test_generation_response.py
+    test_linkedin_multi_image.py
+    test_social_publishing_routes.py
   .env.example
   requirements.txt
 ```
@@ -109,26 +109,45 @@ OpenAPI docs:
 http://localhost:8000/docs
 ```
 
-Temporary endpoint test UI:
+Temporary local test UI files are ignored by Git and do not ship in the production deployment.
+
+## Docker
+
+```powershell
+docker build -t growmino-ai-backend .
+docker run --env-file .env -p 8000:8000 growmino-ai-backend
+```
+
+## Production API Settings
+
+Use these minimum settings before deployment:
 
 ```text
-http://localhost:8000/test-ui
+ENVIRONMENT=production
+API_AUTH_REQUIRED=true
+ALLOW_DEV_AUTH_HEADERS=false
+GROWMINO_JWT_SECRET=<at-least-32-characters>
+CORS_ALLOW_ORIGINS=https://your-frontend-domain.com
+PUBLIC_BASE_URL=https://your-api-domain.com
+EXPOSE_TEST_UI=false
+EXPOSE_API_DOCS=false
+EXPOSE_OUTPUTS=false
+API_RATE_LIMIT_ENABLED=true
+SECURE_HSTS_ENABLED=true
 ```
 
-This is only for local/manual API testing and can be removed before production.
+All API responses include `X-Request-Id`. Error responses keep the old `detail` field and also include a production-friendly error envelope:
 
-## Run LinkedIn Worker
-
-Once:
-
-```powershell
-python scripts/process_linkedin_jobs.py --once
-```
-
-Continuously:
-
-```powershell
-python scripts/process_linkedin_jobs.py --interval 60 --limit 5
+```json
+{
+  "detail": "Authentication required.",
+  "request_id": "request-id",
+  "error": {
+    "code": "UNAUTHORIZED",
+    "message": "Authentication required.",
+    "request_id": "request-id"
+  }
+}
 ```
 
 ## API Handoff Docs
@@ -158,8 +177,15 @@ docs/GrowMino_LinkedIn_Personal_Profile_Postman_Collection.json
 - `GET /api/v1/posts`
 - `GET /api/v1/posts/{post_id}`
 - `POST /api/v1/content-plans`
-- `POST /api/v1/publishing-jobs`
-- `POST /api/v1/assets`
+- `POST /api/v1/social/facebook/posts/text`
+- `POST /api/v1/social/facebook/posts/image-url`
+- `POST /api/v1/social/facebook/posts/image`
+- `POST /api/v1/social/facebook/posts/multi-image-url`
+- `POST /api/v1/social/facebook/posts/multi-image`
+- `POST /api/v1/social/instagram/posts/image-url`
+- `POST /api/v1/social/instagram/posts/image`
+- `POST /api/v1/social/instagram/posts/carousel-url`
+- `POST /api/v1/social/instagram/posts/carousel`
 - `GET /api/v1/integrations/linkedin/connect`
 - `GET /api/v1/integrations/linkedin/callback`
 - `GET /api/v1/integrations/linkedin/status`
@@ -167,6 +193,10 @@ docs/GrowMino_LinkedIn_Personal_Profile_Postman_Collection.json
 - `POST /api/v1/posts/linkedin/publish-text`
 - `POST /api/v1/posts/linkedin/publish-image`
 - `POST /api/v1/posts/linkedin/publish-image-url`
+- `POST /api/v1/social/linkedin/posts/text`
+- `POST /api/v1/social/linkedin/posts/image`
+- `POST /api/v1/social/linkedin/posts/image-url`
+- `POST /api/v1/social/linkedin/posts/multi-image`
 - `POST /api/v1/posts/linkedin/schedule`
 - `GET /api/v1/posts/linkedin/jobs`
 - `POST /api/v1/posts/{post_id}/retry`
@@ -184,6 +214,6 @@ The backend does not persist generated posts to Supabase or any product database
 ## Validation
 
 ```powershell
-python -m compileall app scripts tests
-python -m unittest tests.test_linkedin_client -v
+python -m compileall app tests
+python -m unittest discover -s tests -v
 ```

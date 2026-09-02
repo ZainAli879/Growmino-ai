@@ -20,11 +20,82 @@ X-Growmino-Business-Id: local-business
 Production should set:
 
 ```text
+ENVIRONMENT=production
 API_AUTH_REQUIRED=true
+ALLOW_DEV_AUTH_HEADERS=false
 GROWMINO_JWT_SECRET=<production-jwt-secret-or-replace-auth-dependency>
+CORS_ALLOW_ORIGINS=https://your-frontend-domain.com
+EXPOSE_TEST_UI=false
+EXPOSE_API_DOCS=false
+EXPOSE_OUTPUTS=false
 ```
 
 LinkedIn tokens and provider secrets are never returned to the client.
+
+## Production Guardrails
+
+Every API response includes:
+
+```http
+X-Request-Id: request-id
+```
+
+Frontend clients may also send their own request id:
+
+```http
+X-Request-Id: frontend-generated-request-id
+```
+
+Security headers are added automatically:
+
+```http
+X-Content-Type-Options: nosniff
+X-Frame-Options: DENY
+Referrer-Policy: no-referrer
+Permissions-Policy: camera=(), microphone=(), geolocation=()
+Cache-Control: no-store
+```
+
+Error response format:
+
+```json
+{
+  "detail": "Authentication required.",
+  "request_id": "request-id",
+  "error": {
+    "code": "UNAUTHORIZED",
+    "message": "Authentication required.",
+    "request_id": "request-id"
+  }
+}
+```
+
+The `detail` field is kept for backward compatibility. New frontend work should use `error.code`, `error.message`, and `request_id`.
+
+Default rate limits:
+
+```text
+General API: 120 requests / 60 seconds
+Generation API: 10 requests / 3600 seconds
+Publishing API: 60 requests / 60 seconds
+Max request body: 25,000,000 bytes
+```
+
+Relevant environment variables:
+
+```text
+API_MAX_BODY_BYTES=25000000
+API_RATE_LIMIT_ENABLED=true
+API_RATE_LIMIT_REQUESTS=120
+API_RATE_LIMIT_WINDOW_SECONDS=60
+API_GENERATION_RATE_LIMIT_REQUESTS=10
+API_GENERATION_RATE_LIMIT_WINDOW_SECONDS=3600
+API_PUBLISH_RATE_LIMIT_REQUESTS=60
+API_PUBLISH_RATE_LIMIT_WINDOW_SECONDS=60
+SECURE_HSTS_ENABLED=true
+```
+
+In production, `ENVIRONMENT=production` validates the required auth/CORS settings at startup. The temporary `/test-ui` page and API docs are hidden unless explicitly exposed, and `/outputs` cannot be publicly exposed.
 
 ## Health
 
@@ -45,6 +116,8 @@ Response:
 ### `POST /api/v1/posts`
 
 Generates one caption and one image, then returns the generated content directly. Product-side persistence is handled by the web team.
+
+Generated images are not stored on the API server. The frontend/product backend should save `image_base64` or `image_data_url` into its own object storage, then store the final CDN/storage URL in its database.
 
 Request:
 
@@ -67,14 +140,33 @@ Request:
 }
 ```
 
-Response includes:
+Default response:
 
-- `post_id`
-- `caption`
-- `headline`
-- `openai_image.public_url`
-- `qa`
-- `trace`
+```json
+{
+  "post_id": "2ee39682-7460-4a65-b09f-4eaa5c3b0391",
+  "status": "generated",
+  "platform": "linkedin",
+  "day": "Monday",
+  "content_type": "Educational",
+  "business_name": "GrowMino AI",
+  "caption": "Generated social media caption...",
+  "headline": "Create Weekly Posts From One Brief",
+  "image_url": "",
+  "image_data_url": "data:image/png;base64,...",
+  "image_base64": "...",
+  "image_mime_type": "image/png",
+  "alt_text": "A visual representing Educational content in the AI content automation industry."
+}
+```
+
+Internal debug response:
+
+```text
+POST /api/v1/posts?debug=true
+```
+
+Use `debug=true` only for backend/internal QA. It includes prompt, local file path, QA and trace details.
 
 ## Generated Posts
 
@@ -117,57 +209,184 @@ Request:
 }
 ```
 
-Response includes planned items plus generated caption/image output for each item.
-
-## Assets
-
-### `POST /api/v1/assets`
-
-Accepts a base64 data URL and stores it under local `outputs/manual_uploads`.
-
-Request:
+Default response:
 
 ```json
 {
-  "file_name": "post.png",
-  "data_url": "data:image/png;base64,..."
+  "plan_id": "8e7fa4f2-5ef2-4dc9-9ff4-41c40499739b",
+  "status": "generated",
+  "week_start_date": "2026-08-24",
+  "weekly_goal": "Educate prospects and drive qualified conversations",
+  "theme": "AI social media automation",
+  "total_posts": 5,
+  "posts": [
+    {
+      "position": 1,
+      "post_id": "2ee39682-7460-4a65-b09f-4eaa5c3b0391",
+      "status": "completed",
+      "platform": "linkedin",
+      "day": "Monday",
+      "content_type": "Educational",
+      "business_name": "GrowMino AI",
+      "topic": "How one brief becomes a week of content",
+      "caption": "Generated social media caption...",
+      "headline": "One Brief One Week of Content",
+      "image_url": "",
+      "image_base64": "...",
+      "image_data_url": "data:image/png;base64,...",
+      "image_mime_type": "image/png",
+      "alt_text": "A visual representing Educational content in the AI content automation industry.",
+      "error": ""
+    }
+  ]
 }
 ```
 
-Response:
+Generated images are returned per post as `posts[].image_base64` and `posts[].image_data_url`. `posts[].image_url` is empty because this API does not permanently store generated images.
+
+Internal debug response:
+
+```text
+POST /api/v1/content-plans?debug=true
+```
+
+Use `debug=true` only for backend/internal QA. It returns the older `items` shape with planning directions and `generated_*` fields.
+
+## Platform-Specific Publishing
+
+These endpoints are the preferred production publishing API shape for the web team. Dynamic values such as Page IDs, Instagram account IDs, and access tokens are required in each request.
+
+### Facebook Text
+
+```http
+POST /api/v1/social/facebook/posts/text
+Content-Type: application/json
+```
 
 ```json
 {
-  "file_path": "outputs/manual_uploads/...",
-  "public_url": "/outputs/manual_uploads/..."
+  "page_id": "119504274583951",
+  "page_access_token": "PAGE_ACCESS_TOKEN",
+  "caption": "Testing Facebook text publishing from GrowMino.",
+  "idempotency_key": "optional-client-key"
 }
 ```
 
-Note: generated/manual uploaded files are not product storage. The web team should persist assets on their side. LinkedIn immediate image publishing should use `multipart/form-data` on `/api/v1/posts/linkedin/publish-image`. Scheduled LinkedIn image posts require a durable HTTPS `image_url`.
+### Facebook Image URL
 
-## Meta Publishing
-
-### `POST /api/v1/publishing-jobs`
-
-Publishes to Facebook or Instagram through the existing Meta flow.
-
-Use `image_url` for image posts. `image_file_path` is kept only for backward schema compatibility and is rejected because storage/uploading is handled outside this backend.
-
-Request:
+```http
+POST /api/v1/social/facebook/posts/image-url
+Content-Type: application/json
+```
 
 ```json
 {
-  "platform": "facebook",
-  "caption": "Post caption",
-  "image_url": "https://example.com/image.png",
-  "image_file_path": "",
-  "access_token": "",
-  "facebook_page_id": "",
-  "facebook_access_token": "",
-  "instagram_business_account_id": "",
-  "instagram_access_token": ""
+  "page_id": "119504274583951",
+  "page_access_token": "PAGE_ACCESS_TOKEN",
+  "caption": "Testing Facebook image publishing from GrowMino.",
+  "image_url": "https://cdn.example.com/post.jpg",
+  "idempotency_key": "optional-client-key"
 }
 ```
+
+### Facebook Image Upload
+
+```http
+POST /api/v1/social/facebook/posts/image
+Content-Type: multipart/form-data
+```
+
+Fields: `page_id`, `page_access_token`, `caption`, `idempotency_key`, and `file`.
+
+### Facebook Multi-Image URL
+
+```http
+POST /api/v1/social/facebook/posts/multi-image-url
+Content-Type: application/json
+```
+
+```json
+{
+  "page_id": "119504274583951",
+  "page_access_token": "PAGE_ACCESS_TOKEN",
+  "caption": "Testing Facebook multi-image publishing.",
+  "image_urls": [
+    "https://cdn.example.com/one.jpg",
+    "https://cdn.example.com/two.jpg"
+  ],
+  "idempotency_key": "optional-client-key"
+}
+```
+
+### Facebook Multi-Image Upload
+
+```http
+POST /api/v1/social/facebook/posts/multi-image
+Content-Type: multipart/form-data
+```
+
+Fields: `page_id`, `page_access_token`, `caption`, `idempotency_key`, and `images` repeated 2 to 20 times.
+
+### Instagram Image URL
+
+```http
+POST /api/v1/social/instagram/posts/image-url
+Content-Type: application/json
+```
+
+```json
+{
+  "instagram_business_account_id": "17841462076814255",
+  "instagram_access_token": "IG_ACCESS_TOKEN",
+  "caption": "Testing Instagram publishing from GrowMino.",
+  "image_url": "https://cdn.example.com/post.jpg",
+  "idempotency_key": "optional-client-key"
+}
+```
+
+### Instagram Image Upload
+
+```http
+POST /api/v1/social/instagram/posts/image
+Content-Type: multipart/form-data
+```
+
+Fields: `instagram_business_account_id`, `instagram_access_token`, `caption`, `idempotency_key`, and `file`.
+
+Instagram multipart uploads are disabled while server-side image storage is disabled. Upload images to product object storage first, then call `/api/v1/social/instagram/posts/image-url`.
+
+### Instagram Carousel URL
+
+```http
+POST /api/v1/social/instagram/posts/carousel-url
+Content-Type: application/json
+```
+
+```json
+{
+  "instagram_business_account_id": "17841462076814255",
+  "instagram_access_token": "IG_ACCESS_TOKEN",
+  "caption": "Testing Instagram carousel publishing.",
+  "image_urls": [
+    "https://cdn.example.com/one.jpg",
+    "https://cdn.example.com/two.jpg"
+  ],
+  "idempotency_key": "optional-client-key"
+}
+```
+
+### Instagram Carousel Upload
+
+```http
+POST /api/v1/social/instagram/posts/carousel
+Content-Type: multipart/form-data
+```
+
+Fields: `instagram_business_account_id`, `instagram_access_token`, `caption`, `idempotency_key`, and `images` repeated 2 to 10 times.
+
+Instagram carousel multipart uploads are disabled while server-side image storage is disabled. Upload images to product object storage first, then call `/api/v1/social/instagram/posts/carousel-url`.
+
+There is no Instagram text-only endpoint because Instagram publishing requires media.
 
 ## LinkedIn Personal Profile Integration
 
@@ -230,6 +449,12 @@ Request:
 }
 ```
 
+Production alias:
+
+```text
+POST /api/v1/social/linkedin/posts/text
+```
+
 ### `POST /api/v1/posts/linkedin/publish-image`
 
 Publishes an immediate image post from multipart upload.
@@ -248,6 +473,12 @@ Allowed image types:
 
 The backend validates actual content, registers the LinkedIn asset, streams the binary to LinkedIn’s `uploadUrl`, then creates the UGC image post.
 
+Production alias:
+
+```text
+POST /api/v1/social/linkedin/posts/image
+```
+
 ### `POST /api/v1/posts/linkedin/publish-image-url`
 
 Publishes an immediate image post from a durable HTTPS URL.
@@ -260,6 +491,12 @@ Request:
   "image_url": "https://cdn.example.com/post.png",
   "idempotency_key": "unique-client-key"
 }
+```
+
+Production alias:
+
+```text
+POST /api/v1/social/linkedin/posts/image-url
 ```
 
 SSRF protection blocks non-HTTPS URLs, private IPs, localhost, link-local, multicast, reserved, unspecified addresses, URL credentials, and non-default HTTPS ports.

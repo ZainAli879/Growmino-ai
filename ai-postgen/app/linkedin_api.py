@@ -265,6 +265,44 @@ async def publish_linkedin_image_url(
 
 
 @router.post(
+    "/social/linkedin/posts/text",
+    response_model=LinkedInPublishResponse,
+    responses={400: {"model": ErrorResponse}, 401: {"model": ErrorResponse}, 409: {"model": ErrorResponse}, 502: {"model": ErrorResponse}},
+)
+async def publish_social_linkedin_text(
+    payload: LinkedInPublishTextRequest,
+    auth: AuthContext = Depends(require_auth_context),
+) -> LinkedInPublishResponse:
+    return await publish_linkedin_text(payload=payload, auth=auth)
+
+
+@router.post(
+    "/social/linkedin/posts/image",
+    response_model=LinkedInPublishResponse,
+    responses={400: {"model": ErrorResponse}, 401: {"model": ErrorResponse}, 409: {"model": ErrorResponse}, 502: {"model": ErrorResponse}},
+)
+async def publish_social_linkedin_image(
+    caption: str = Form(..., min_length=1, max_length=3000),
+    idempotency_key: str = Form(default=""),
+    file: UploadFile = File(...),
+    auth: AuthContext = Depends(require_auth_context),
+) -> LinkedInPublishResponse:
+    return await publish_linkedin_image(caption=caption, idempotency_key=idempotency_key, file=file, auth=auth)
+
+
+@router.post(
+    "/social/linkedin/posts/image-url",
+    response_model=LinkedInPublishResponse,
+    responses={400: {"model": ErrorResponse}, 401: {"model": ErrorResponse}, 409: {"model": ErrorResponse}, 502: {"model": ErrorResponse}},
+)
+async def publish_social_linkedin_image_url(
+    payload: LinkedInPublishImageUrlRequest,
+    auth: AuthContext = Depends(require_auth_context),
+) -> LinkedInPublishResponse:
+    return await publish_linkedin_image_url(payload=payload, auth=auth)
+
+
+@router.post(
     "/social/linkedin/posts/multi-image",
     response_model=LinkedInPublishResponse,
     responses={

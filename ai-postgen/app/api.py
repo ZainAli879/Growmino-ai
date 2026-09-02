@@ -1,19 +1,22 @@
 from __future__ import annotations
 
 import asyncio
-import base64
+from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 import os
 from pathlib import Path
 from time import perf_counter
 from uuid import uuid4
 
-from fastapi import Depends, FastAPI, HTTPException, Query
+from fastapi import Depends, FastAPI, HTTPException, Query, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, RedirectResponse
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from openai import OpenAIError
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
+from app.api_security import ApiSecurityMiddleware, api_error_payload
 from app.auth import AuthContext, require_auth_context
 from app.config import Settings, get_settings
 from app.linkedin_api import router as linkedin_router
@@ -31,16 +34,15 @@ from app.schemas import (
     LinkedInPostStatus,
     MetaInfo,
     OpenAIImageInfo,
-    PublishRequest,
-    PublishResponse,
+    PublicContentPlanResponse,
+    PublicContentPlanPost,
+    PublicGenerateResponse,
     QAInfo,
     TraceInfo,
-    UploadImageRequest,
-    UploadImageResponse,
     WeeklyContentPlanRequest,
 )
-from app.social_publish import publish_to_meta
-from app.utils import append_jsonl, build_public_output_url, ensure_outputs_dir
+from app.social_api import router as social_router
+from app.utils import append_jsonl, ensure_outputs_dir
 from app.validators import (
     heuristic_no_fabricated_numbers_if_no_proof,
     validate_day_type_match,
@@ -49,7 +51,26 @@ from app.validators import (
     validate_word_count,
 )
 
-app = FastAPI(title="AI Post Generator", version="1.0.0")
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    get_settings()
+    yield
+
+
+_api_docs_enabled = os.getenv("EXPOSE_API_DOCS", "").strip().lower()
+if _api_docs_enabled:
+    _api_docs_enabled_bool = _api_docs_enabled in {"1", "true", "yes", "on"}
+else:
+    _api_docs_enabled_bool = os.getenv("ENVIRONMENT", "development").strip().lower() != "production"
+
+app = FastAPI(
+    title="AI Post Generator",
+    version="1.0.0",
+    lifespan=lifespan,
+    docs_url="/docs" if _api_docs_enabled_bool else None,
+    redoc_url="/redoc" if _api_docs_enabled_bool else None,
+    openapi_url="/openapi.json" if _api_docs_enabled_bool else None,
+)
 
 _cors_allow_origins = [
     origin.strip()
@@ -57,6 +78,7 @@ _cors_allow_origins = [
     if origin.strip()
 ]
 _outputs_dir = ensure_outputs_dir(os.getenv("OUTPUTS_DIR", "./outputs").strip() or "./outputs")
+app.add_middleware(ApiSecurityMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_cors_allow_origins,
@@ -64,12 +86,57 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-app.mount("/outputs", StaticFiles(directory=_outputs_dir), name="outputs")
+if os.getenv("EXPOSE_OUTPUTS", "false").strip().lower() in {"1", "true", "yes", "on"}:
+    app.mount("/outputs", StaticFiles(directory=_outputs_dir), name="outputs")
 app.include_router(linkedin_router)
+app.include_router(social_router)
+
+
+@app.exception_handler(StarletteHTTPException)
+async def http_exception_handler(request: Request, exc: StarletteHTTPException) -> JSONResponse:
+    request_id = _request_id_from_state(request)
+    message = _error_message(exc.detail)
+    return JSONResponse(
+        status_code=exc.status_code,
+        content=api_error_payload(
+            code=_error_code_for_status(exc.status_code),
+            message=message,
+            request_id=request_id,
+        ),
+        headers=getattr(exc, "headers", None),
+    )
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError) -> JSONResponse:
+    request_id = _request_id_from_state(request)
+    return JSONResponse(
+        status_code=422,
+        content=api_error_payload(
+            code="VALIDATION_ERROR",
+            message=_validation_error_message(exc),
+            request_id=request_id,
+        ),
+    )
+
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+    request_id = _request_id_from_state(request)
+    return JSONResponse(
+        status_code=500,
+        content=api_error_payload(
+            code="INTERNAL_SERVER_ERROR",
+            message="Unexpected server error.",
+            request_id=request_id,
+        ),
+    )
 
 
 @app.get("/test-ui", include_in_schema=False)
 async def test_ui() -> FileResponse:
+    if not _test_ui_enabled():
+        raise HTTPException(status_code=404, detail="Not Found")
     return FileResponse(Path(__file__).resolve().parent / "static" / "test-ui.html")
 
 
@@ -78,6 +145,8 @@ async def test_ui_linkedin_connect(
     user_id: str = Query(default="local-user"),
     business_id: str = Query(default="local-business"),
 ) -> RedirectResponse:
+    if not _test_ui_enabled():
+        raise HTTPException(status_code=404, detail="Not Found")
     try:
         settings = get_settings()
         state, state_hash = create_state_token()
@@ -102,10 +171,15 @@ async def healthcheck() -> dict[str, str]:
 
 @app.post(
     "/api/v1/posts",
-    response_model=GenerateResponse,
-    responses={400: {"model": ErrorResponse}, 502: {"model": ErrorResponse}},
+    response_model=PublicGenerateResponse | GenerateResponse,
+    responses={400: {"model": ErrorResponse}, 401: {"model": ErrorResponse}, 429: {"model": ErrorResponse}, 502: {"model": ErrorResponse}},
 )
-async def create_post_endpoint(payload: GenerateRequest) -> GenerateResponse:
+async def create_post_endpoint(
+    payload: GenerateRequest,
+    request: Request,
+    debug: bool = Query(default=False, description="Return internal QA, trace, prompt and local file details."),
+    auth: AuthContext = Depends(require_auth_context),
+) -> PublicGenerateResponse | GenerateResponse:
     settings: Settings
     try:
         settings = get_settings()
@@ -119,7 +193,11 @@ async def create_post_endpoint(payload: GenerateRequest) -> GenerateResponse:
 
     try:
         result = await asyncio.wait_for(_run_generation(payload, settings), timeout=settings.request_timeout_seconds)
-        return result
+        if debug:
+            if result.openai_image.public_url:
+                result.openai_image.public_url = _absolute_public_url(result.openai_image.public_url, request, settings)
+            return result
+        return _public_generate_response(result, request, settings)
     except asyncio.TimeoutError as exc:
         raise HTTPException(status_code=502, detail="Generation timed out. Please retry.") from exc
     except OpenAIError as exc:
@@ -135,9 +213,12 @@ async def create_post_endpoint(payload: GenerateRequest) -> GenerateResponse:
 @app.get(
     "/api/v1/posts",
     response_model=GeneratedPostsResponse,
-    responses={502: {"model": ErrorResponse}},
+    responses={401: {"model": ErrorResponse}, 429: {"model": ErrorResponse}, 502: {"model": ErrorResponse}},
 )
-async def list_posts_endpoint(limit: int = Query(default=50, ge=1, le=100)) -> GeneratedPostsResponse:
+async def list_posts_endpoint(
+    limit: int = Query(default=50, ge=1, le=100),
+    auth: AuthContext = Depends(require_auth_context),
+) -> GeneratedPostsResponse:
     return GeneratedPostsResponse(posts=[])
 
 
@@ -174,10 +255,15 @@ async def get_post_endpoint(
 
 @app.post(
     "/api/v1/content-plans",
-    response_model=ContentPlanResponse,
-    responses={400: {"model": ErrorResponse}, 502: {"model": ErrorResponse}},
+    response_model=PublicContentPlanResponse | ContentPlanResponse,
+    responses={400: {"model": ErrorResponse}, 401: {"model": ErrorResponse}, 429: {"model": ErrorResponse}, 502: {"model": ErrorResponse}},
 )
-async def create_content_plan_endpoint(payload: WeeklyContentPlanRequest) -> ContentPlanResponse:
+async def create_content_plan_endpoint(
+    payload: WeeklyContentPlanRequest,
+    request: Request,
+    debug: bool = Query(default=False, description="Return internal planning and generated_* fields."),
+    auth: AuthContext = Depends(require_auth_context),
+) -> PublicContentPlanResponse | ContentPlanResponse:
     try:
         settings = get_settings()
     except Exception as exc:
@@ -191,8 +277,13 @@ async def create_content_plan_endpoint(payload: WeeklyContentPlanRequest) -> Con
             timeout=settings.request_timeout_seconds,
         )
         await _generate_posts_for_plan(plan, payload, settings)
+        for item in plan.items:
+            if item.generated_image_url:
+                item.generated_image_url = _absolute_public_url(item.generated_image_url, request, settings)
         plan.status = "generated" if all(item.generation_status == "completed" for item in plan.items) else "partially_generated"
-        return plan
+        if debug:
+            return plan
+        return _public_content_plan_response(plan, payload)
     except asyncio.TimeoutError as exc:
         raise HTTPException(status_code=502, detail="Content plan generation timed out. Please retry.") from exc
     except OpenAIError as exc:
@@ -201,71 +292,6 @@ async def create_content_plan_endpoint(payload: WeeklyContentPlanRequest) -> Con
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     except Exception as exc:
         raise HTTPException(status_code=502, detail="Unexpected content plan generation error.") from exc
-
-
-@app.post(
-    "/api/v1/publishing-jobs",
-    response_model=PublishResponse,
-    responses={400: {"model": ErrorResponse}, 502: {"model": ErrorResponse}},
-)
-async def create_publishing_job_endpoint(payload: PublishRequest) -> PublishResponse:
-    try:
-        settings = get_settings()
-    except Exception as exc:
-        raise HTTPException(status_code=502, detail="Service configuration error.") from exc
-
-    try:
-        result = await asyncio.to_thread(publish_to_meta, payload, settings)
-    except RuntimeError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    except Exception as exc:
-        raise HTTPException(status_code=502, detail="Unexpected publishing error.") from exc
-
-    return PublishResponse(
-        platform=payload.platform,
-        published=result.published,
-        post_id=result.post_id,
-        creation_id=result.creation_id,
-        message=result.message,
-        image_url_used=result.image_url_used,
-        drive_image_url=result.drive_image_url,
-    )
-
-
-@app.post(
-    "/api/v1/assets",
-    response_model=UploadImageResponse,
-    responses={400: {"model": ErrorResponse}, 502: {"model": ErrorResponse}},
-)
-async def create_asset_endpoint(payload: UploadImageRequest) -> UploadImageResponse:
-    try:
-        settings = get_settings()
-    except Exception as exc:
-        raise HTTPException(status_code=502, detail="Service configuration error.") from exc
-
-    suffix = Path(payload.file_name or "upload.png").suffix or ".png"
-    uploads_dir = Path(ensure_outputs_dir(settings.outputs_dir)) / "manual_uploads"
-    uploads_dir.mkdir(parents=True, exist_ok=True)
-    file_name = f"{datetime.now().strftime('%Y%m%d-%H%M%S')}-upload{suffix}"
-    saved_path = uploads_dir / file_name
-
-    try:
-        if "," not in payload.data_url:
-            raise HTTPException(status_code=400, detail="Uploaded image must be a valid data URL.")
-        content = base64.b64decode(payload.data_url.split(",", 1)[1])
-        if not content:
-            raise HTTPException(status_code=400, detail="Uploaded file is empty.")
-        saved_path.write_bytes(content)
-    except HTTPException:
-        raise
-    except Exception as exc:
-        raise HTTPException(status_code=502, detail="Could not save uploaded image.") from exc
-
-    public_relative_path = build_public_output_url(str(saved_path))
-    return UploadImageResponse(
-        file_path=str(saved_path).replace("\\", "/"),
-        public_url=f"/outputs/{public_relative_path}",
-    )
 
 
 async def _run_generation(payload: GenerateRequest, settings: Settings) -> GenerateResponse:
@@ -329,7 +355,8 @@ async def _run_generation(payload: GenerateRequest, settings: Settings) -> Gener
         image_model=image_result.model,
     )
 
-    local_public_url = f"/outputs/{build_public_output_url(image_result.file_path)}"
+    image_data_url = f"{image_result.image_mime_type};base64,{image_result.image_base64}"
+    image_data_url = f"data:{image_data_url}"
     append_jsonl(
         settings.traces_file,
         {
@@ -344,7 +371,6 @@ async def _run_generation(payload: GenerateRequest, settings: Settings) -> Gener
             "caption": caption_result.caption,
             "headline": caption_result.headline,
             "image_prompt_used": image_result.prompt_used,
-            "image_file_path": image_result.file_path,
             "qa": qa.model_dump(),
             "timings_ms": {
                 "total": total_elapsed_ms,
@@ -356,7 +382,7 @@ async def _run_generation(payload: GenerateRequest, settings: Settings) -> Gener
             "text_provider": settings.text_provider,
             "text_model": text_model,
             "post_id": trace_id,
-            "public_image_url": local_public_url,
+            "image_mime_type": image_result.image_mime_type,
         },
     )
 
@@ -377,7 +403,10 @@ async def _run_generation(payload: GenerateRequest, settings: Settings) -> Gener
             prompt_used=image_result.prompt_used,
             negative_prompt_used=image_result.negative_prompt_used,
             file_path=image_result.file_path,
-            public_url=local_public_url,
+            public_url="",
+            image_data_url=image_data_url,
+            image_base64=image_result.image_base64,
+            image_mime_type=image_result.image_mime_type,
             alt_text=image_result.alt_text,
         ),
         qa=qa,
@@ -421,7 +450,120 @@ async def _generate_posts_for_plan(
             item.generated_caption = generated.caption
             item.generated_headline = generated.headline
             item.generated_image_url = generated.openai_image.public_url
+            item.generated_image_data_url = generated.openai_image.image_data_url
+            item.generated_image_base64 = generated.openai_image.image_base64
+            item.generated_image_mime_type = generated.openai_image.image_mime_type
+            item.generated_alt_text = generated.openai_image.alt_text
             item.generation_error = ""
         except Exception as exc:
             item.generation_status = "failed"
             item.generation_error = str(exc)
+
+
+def _public_generate_response(
+    result: GenerateResponse,
+    request: Request,
+    settings: Settings,
+) -> PublicGenerateResponse:
+    return PublicGenerateResponse(
+        post_id=result.post_id,
+        platform=result.meta.platform,
+        day=result.meta.day,
+        content_type=result.meta.content_type,
+        business_name=result.meta.business_name,
+        caption=result.caption,
+        headline=result.headline,
+        image_url=result.openai_image.public_url,
+        image_data_url=result.openai_image.image_data_url,
+        image_base64=result.openai_image.image_base64,
+        image_mime_type=result.openai_image.image_mime_type,
+        alt_text=result.openai_image.alt_text,
+    )
+
+
+def _public_content_plan_response(
+    plan: ContentPlanResponse,
+    payload: WeeklyContentPlanRequest,
+) -> PublicContentPlanResponse:
+    return PublicContentPlanResponse(
+        plan_id=plan.plan_id,
+        status=plan.status,
+        week_start_date=plan.week_start_date,
+        weekly_goal=plan.weekly_goal,
+        theme=plan.theme,
+        total_posts=plan.total_posts,
+        posts=[
+            PublicContentPlanPost(
+                position=item.position,
+                post_id=item.generated_post_id,
+                status=item.generation_status,
+                platform=item.platform,
+                day=item.day,
+                content_type=item.content_type,
+                business_name=payload.business_name,
+                topic=item.topic,
+                caption=item.generated_caption,
+                headline=item.generated_headline,
+                image_url=item.generated_image_url,
+                image_base64=item.generated_image_base64,
+                image_data_url=item.generated_image_data_url,
+                image_mime_type=item.generated_image_mime_type,
+                alt_text=item.generated_alt_text,
+                error=item.generation_error,
+            )
+            for item in plan.items
+        ],
+    )
+
+
+def _absolute_public_url(value: str, request: Request, settings: Settings) -> str:
+    if value.startswith(("http://", "https://")):
+        return value
+    base_url = settings.public_base_url or str(request.base_url).rstrip("/")
+    return f"{base_url}/{value.lstrip('/')}"
+
+
+def _request_id_from_state(request: Request) -> str:
+    return str(getattr(request.state, "request_id", "") or uuid4())
+
+
+def _error_message(detail: object) -> str:
+    if isinstance(detail, str):
+        return detail
+    return "Request failed."
+
+
+def _error_code_for_status(status_code: int) -> str:
+    return {
+        400: "BAD_REQUEST",
+        401: "UNAUTHORIZED",
+        403: "FORBIDDEN",
+        404: "NOT_FOUND",
+        409: "CONFLICT",
+        413: "REQUEST_BODY_TOO_LARGE",
+        422: "VALIDATION_ERROR",
+        429: "RATE_LIMIT_EXCEEDED",
+        500: "INTERNAL_SERVER_ERROR",
+        502: "UPSTREAM_SERVICE_ERROR",
+        503: "SERVICE_UNAVAILABLE",
+        504: "UPSTREAM_TIMEOUT",
+    }.get(status_code, "REQUEST_FAILED")
+
+
+def _validation_error_message(exc: RequestValidationError) -> str:
+    first_error = exc.errors()[0] if exc.errors() else {}
+    location = ".".join(str(part) for part in first_error.get("loc", []) if part != "body")
+    message = str(first_error.get("msg") or "Invalid request.")
+    if location:
+        return f"{location}: {message}"
+    return message
+
+
+def _test_ui_enabled() -> bool:
+    try:
+        return get_settings().expose_test_ui
+    except Exception:
+        explicit_value = os.getenv("EXPOSE_TEST_UI", "").strip().lower()
+        if explicit_value:
+            return explicit_value in {"1", "true", "yes", "on"}
+        return os.getenv("ENVIRONMENT", "development").strip().lower() != "production"

@@ -12,7 +12,7 @@ from PIL import Image, ImageDraw, ImageFont
 from app.chains import CaptionGenerationResult, generate_caption_with_retry, generate_image_prompt_from_caption, generate_weekly_content_plan
 from app.config import Settings
 from app.schemas import ContentPlanResponse, GenerateRequest, WeeklyContentPlanRequest
-from app.utils import build_alt_text, build_output_file_path, ensure_outputs_dir
+from app.utils import build_alt_text
 
 _OPENAI_SUPPORTED_SIZES = {"1024x1024", "1024x1536", "1536x1024", "auto"}
 
@@ -25,6 +25,8 @@ class ImageGenerationResult:
     prompt_used: str
     negative_prompt_used: str
     file_path: str
+    image_base64: str
+    image_mime_type: str
     alt_text: str
 
 
@@ -202,6 +204,19 @@ def _assert_valid_image_bytes(data: bytes, source: str) -> None:
         raise RuntimeError(f"Logo content from {source} is not a valid image.") from exc
 
 
+def _detect_image_mime_type(data: bytes) -> str:
+    try:
+        with Image.open(BytesIO(data)) as image:
+            return {
+                "JPEG": "image/jpeg",
+                "PNG": "image/png",
+                "WEBP": "image/webp",
+                "GIF": "image/gif",
+            }.get(str(image.format or "").upper(), "image/png")
+    except Exception:
+        return "image/png"
+
+
 def _load_logo_bytes(logo_ref: str, timeout_seconds: int) -> bytes:
     value = (logo_ref or "").strip()
     if not value:
@@ -366,14 +381,6 @@ def generate_image(payload: GenerateRequest, settings: Settings, caption: str, h
             "no brand marks, and no fake product UI branding anywhere."
         )
 
-    outputs_dir = ensure_outputs_dir(settings.outputs_dir)
-    file_path = build_output_file_path(
-        outputs_dir=outputs_dir,
-        platform=payload.platform.value,
-        day=payload.day.value,
-        content_type=payload.content_type.value,
-    )
-
     if settings.image_provider == "openrouter":
         endpoint = f"{settings.openrouter_base_url}/chat/completions"
         headers = _openrouter_headers(settings)
@@ -458,9 +465,7 @@ def generate_image(payload: GenerateRequest, settings: Settings, caption: str, h
 
     if use_overlay_logo and logo_bytes is not None:
         image_bytes = _overlay_logo(image_bytes, logo_bytes)
-
-    with open(file_path, "wb") as f:
-        f.write(image_bytes)
+    image_mime_type = _detect_image_mime_type(image_bytes)
 
     return ImageGenerationResult(
         model=provider_label,
@@ -468,7 +473,9 @@ def generate_image(payload: GenerateRequest, settings: Settings, caption: str, h
         style=style,
         prompt_used=prompt,
         negative_prompt_used="",
-        file_path=file_path.replace("\\", "/"),
+        file_path="",
+        image_base64=base64.b64encode(image_bytes).decode("ascii"),
+        image_mime_type=image_mime_type,
         alt_text=build_alt_text(
             content_type=payload.content_type.value,
             industry=payload.industry,
