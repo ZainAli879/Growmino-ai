@@ -24,8 +24,10 @@ from app.linkedin_client import build_authorization_url, create_state_token, oau
 from app.linkedin_store import get_publish_job
 from app.linkedin_store import insert_oauth_state
 from app.openai_clients import generate_caption, generate_content_plan, generate_image
+from app.post_generation_service import PostGenerationService, PostGenerationServiceError
 from app.schemas import (
     ContentPlanResponse,
+    CreatePostRequest,
     ErrorResponse,
     GenerateRequest,
     GenerateResponse,
@@ -171,15 +173,21 @@ async def healthcheck() -> dict[str, str]:
 
 @app.post(
     "/api/v1/posts",
-    response_model=PublicGenerateResponse | GenerateResponse,
-    responses={400: {"model": ErrorResponse}, 401: {"model": ErrorResponse}, 429: {"model": ErrorResponse}, 502: {"model": ErrorResponse}},
+    response_model=PublicGenerateResponse,
+    responses={
+        400: {"model": ErrorResponse},
+        401: {"model": ErrorResponse},
+        404: {"model": ErrorResponse},
+        422: {"model": ErrorResponse},
+        429: {"model": ErrorResponse},
+        502: {"model": ErrorResponse},
+        503: {"model": ErrorResponse},
+    },
 )
 async def create_post_endpoint(
-    payload: GenerateRequest,
-    request: Request,
-    debug: bool = Query(default=False, description="Return internal QA, trace, prompt and local file details."),
+    payload: CreatePostRequest,
     auth: AuthContext = Depends(require_auth_context),
-) -> PublicGenerateResponse | GenerateResponse:
+) -> PublicGenerateResponse:
     settings: Settings
     try:
         settings = get_settings()
@@ -187,21 +195,14 @@ async def create_post_endpoint(
         raise HTTPException(status_code=502, detail="Service configuration error.") from exc
 
     try:
-        validate_day_type_match(payload.day, payload.content_type)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-
-    try:
-        result = await asyncio.wait_for(_run_generation(payload, settings), timeout=settings.request_timeout_seconds)
-        if debug:
-            if result.openai_image.public_url:
-                result.openai_image.public_url = _absolute_public_url(result.openai_image.public_url, request, settings)
-            return result
-        return _public_generate_response(result, request, settings)
+        service = PostGenerationService(settings)
+        return await asyncio.wait_for(service.create_post(payload, auth), timeout=settings.request_timeout_seconds)
     except asyncio.TimeoutError as exc:
         raise HTTPException(status_code=502, detail="Generation timed out. Please retry.") from exc
     except OpenAIError as exc:
         raise HTTPException(status_code=502, detail="OpenAI service error while generating content.") from exc
+    except PostGenerationServiceError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.message) from exc
     except RuntimeError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     except HTTPException:

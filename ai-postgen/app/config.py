@@ -69,6 +69,15 @@ class Settings:
     api_publish_rate_limit_requests: int = 60
     api_publish_rate_limit_window_seconds: int = 60
     secure_hsts_enabled: bool = False
+    database_url: str = ""
+    database_pool_min_size: int = 1
+    database_pool_max_size: int = 5
+    supabase_url: str = ""
+    supabase_service_role_key: str = ""
+    supabase_post_media_bucket: str = "post-media"
+    supabase_business_assets_bucket: str = "business-assets"
+    supabase_request_timeout_seconds: int = 30
+    local_uploads_root: str = "./uploads"
 
     def image_size_for_platform(self, platform: str) -> str:
         platform_key = (platform or "").strip().lower()
@@ -185,6 +194,15 @@ def get_settings() -> Settings:
     api_publish_rate_limit_requests = int(os.getenv("API_PUBLISH_RATE_LIMIT_REQUESTS", "60").strip() or "60")
     api_publish_rate_limit_window_seconds = int(os.getenv("API_PUBLISH_RATE_LIMIT_WINDOW_SECONDS", "60").strip() or "60")
     secure_hsts_enabled = os.getenv("SECURE_HSTS_ENABLED", "false").strip().lower() in {"1", "true", "yes", "on"}
+    database_url = os.getenv("DATABASE_URL", "").strip()
+    database_pool_min_size = int(os.getenv("DATABASE_POOL_MIN_SIZE", "1").strip() or "1")
+    database_pool_max_size = int(os.getenv("DATABASE_POOL_MAX_SIZE", "5").strip() or "5")
+    supabase_url = os.getenv("SUPABASE_URL", "").strip().rstrip("/")
+    supabase_service_role_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "").strip()
+    supabase_post_media_bucket = os.getenv("SUPABASE_POST_MEDIA_BUCKET", "post-media").strip() or "post-media"
+    supabase_business_assets_bucket = os.getenv("SUPABASE_BUSINESS_ASSETS_BUCKET", "business-assets").strip() or "business-assets"
+    supabase_request_timeout_seconds = int(os.getenv("SUPABASE_REQUEST_TIMEOUT_SECONDS", "30").strip() or "30")
+    local_uploads_root = os.getenv("LOCAL_UPLOADS_ROOT", "./uploads").strip() or "./uploads"
     raw_cors_allow_origins = os.getenv(
         "CORS_ALLOW_ORIGINS",
         "",
@@ -210,6 +228,10 @@ def get_settings() -> Settings:
                 raise RuntimeError("LinkedIn production configuration requires client id, client secret, and TOKEN_ENCRYPTION_KEY.")
             if not linkedin_redirect_uri.startswith("https://"):
                 raise RuntimeError("LINKEDIN_REDIRECT_URI must use HTTPS in production.")
+        if database_url and "business-management" not in database_url:
+            raise RuntimeError("DATABASE_URL for post generation must point to the business-management database.")
+        if supabase_url and not supabase_url.startswith("https://"):
+            raise RuntimeError("SUPABASE_URL must use HTTPS in production.")
 
     return Settings(
         environment=environment,
@@ -273,4 +295,13 @@ def get_settings() -> Settings:
         api_publish_rate_limit_requests=api_publish_rate_limit_requests,
         api_publish_rate_limit_window_seconds=api_publish_rate_limit_window_seconds,
         secure_hsts_enabled=secure_hsts_enabled,
+        database_url=database_url,
+        database_pool_min_size=database_pool_min_size,
+        database_pool_max_size=database_pool_max_size,
+        supabase_url=supabase_url,
+        supabase_service_role_key=supabase_service_role_key,
+        supabase_post_media_bucket=supabase_post_media_bucket,
+        supabase_business_assets_bucket=supabase_business_assets_bucket,
+        supabase_request_timeout_seconds=supabase_request_timeout_seconds,
+        local_uploads_root=local_uploads_root,
     )

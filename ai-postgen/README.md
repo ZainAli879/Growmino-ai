@@ -2,13 +2,15 @@
 
 Backend-only FastAPI service for GrowMino AI content generation and social publishing.
 
-This codebase intentionally does not include a frontend, Streamlit app, Supabase integration, Google Sheets pipeline, or Google Drive upload flow. The web team should call these APIs directly and handle product-side persistence/storage in their own application layer.
+This codebase intentionally does not include a frontend, Streamlit app, Google Sheets pipeline, or Google Drive upload flow. The web team should call these APIs directly.
 
 ## What This Backend Provides
 
 - AI caption + image generation with OpenAI or OpenRouter
+- Production generated-post creation from `business-management` PostgreSQL data
+- Generated post image upload to Supabase Storage
+- Generated post metadata persistence to `public.posts`
 - Weekly content plan generation with automatic post generation
-- Generated images returned as base64/data URLs for product-side storage
 - Meta publishing for Facebook and Instagram using public image URLs
 - LinkedIn personal-profile OAuth
 - LinkedIn personal-profile text publishing
@@ -27,15 +29,18 @@ ai-postgen/
     auth.py
     chains.py
     config.py
+    database.py
     linkedin_api.py
     linkedin_client.py
     linkedin_store.py
     main.py
     openai_clients.py
+    post_generation_service.py
     prompt_library.py
     schemas.py
     social_api.py
     social_publish.py
+    storage.py
     utils.py
     validators.py
   docs/
@@ -95,6 +100,16 @@ Generate `TOKEN_ENCRYPTION_KEY`:
 
 ```powershell
 python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+```
+
+For generated post persistence:
+
+```text
+DATABASE_URL=postgresql://APP_USER:PASSWORD@127.0.0.1:5432/business-management
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=
+SUPABASE_POST_MEDIA_BUCKET=post-media
+SUPABASE_BUSINESS_ASSETS_BUCKET=business-assets
 ```
 
 ## Run Backend
@@ -202,12 +217,13 @@ docs/GrowMino_LinkedIn_Personal_Profile_Postman_Collection.json
 - `POST /api/v1/posts/{post_id}/retry`
 - `DELETE /api/v1/posts/{post_id}/schedule`
 
-## Storage Policy
+## Generated Post Persistence
 
-The backend does not persist generated posts to Supabase or any product database.
+`POST /api/v1/posts` is the production generated-post endpoint. It reads business, category, marketing profile, and weekly schedule data from the `business-management` PostgreSQL database, generates the caption/image with the existing AI implementation, uploads the image to Supabase Storage, inserts the generated post into `public.posts`, and returns public image URL fields only.
 
-- `POST /api/v1/posts` returns generated content and image metadata directly.
-- The web/product team should save generated captions, image URLs, post plans, user records, and business records on their side.
+- Request body: `business_id`, `weekly_schedule_id`, `platform`
+- Response image fields: `image_url` and `image_urls`
+- The API no longer returns Base64 for `POST /api/v1/posts`
 - LinkedIn OAuth state, encrypted profile tokens, and scheduled LinkedIn jobs use `LINKEDIN_STORE_FILE` for backend runtime state.
 - For production, replace `app/linkedin_store.py` with the platform database implementation while keeping the same function contracts.
 

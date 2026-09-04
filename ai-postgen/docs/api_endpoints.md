@@ -115,58 +115,73 @@ Response:
 
 ### `POST /api/v1/posts`
 
-Generates one caption and one image, then returns the generated content directly. Product-side persistence is handled by the web team.
+Generates one caption and one image from existing business/schedule records, uploads the generated image to Supabase Storage, stores the generated post in `public.posts`, and returns a clean URL-based response.
 
-Generated images are not stored on the API server. The frontend/product backend should save `image_base64` or `image_data_url` into its own object storage, then store the final CDN/storage URL in its database.
+The frontend should no longer send the full business profile to this endpoint. Send identifiers only.
 
 Request:
 
 ```json
 {
-  "business_name": "GrowMino AI",
-  "industry": "AI content automation",
-  "offer": "AI-generated captions and visuals for businesses",
-  "target_audience": "Founders and marketing teams",
-  "audience_pain_points": "They struggle to create consistent social content",
-  "weekly_focus_topic": "Turning one business brief into ready-to-post content",
-  "day": "Monday",
-  "content_type": "Educational",
-  "tone": "Confident and practical",
-  "brand_personality": "Modern, sharp, reliable",
-  "cta_preference": "Invite readers to request a demo",
-  "proof_assets": "Used to speed up weekly content planning",
-  "company_logo_url": "https://example.com/logo.png",
-  "platform": "linkedin"
+  "business_id": "e450a91d-fb86-48de-a775-dab10b1749b7",
+  "weekly_schedule_id": "30c4b1fb-93a8-40a7-a8dc-8a13948662f3",
+  "platform": "instagram"
 }
+```
+
+Backend DB mapping:
+
+```text
+business_name          = businesses.business_name
+industry               = categories.title + " - " + subcategories.title
+offer                  = business_weekly_schedules.offer
+target_audience        = business_marketing_profiles.targeted_audience
+audience_pain_points   = business_weekly_schedules.pain_point
+weekly_focus_topic     = business_weekly_schedules.weekly_topic
+day                    = business_weekly_schedules.day_of_week converted to weekday name
+content_type           = business_weekly_schedules.content_type
+tone                   = business_weekly_schedules.tone
+brand_personality      = business_weekly_schedules.brand_personality
+cta_preference         = business_weekly_schedules.cta_preferences
+proof_assets           = business_weekly_schedules.proof_assets
+company_logo_url       = businesses.logo when usable
+platform               = request platform, validated against schedule platforms
 ```
 
 Default response:
 
 ```json
 {
-  "post_id": "2ee39682-7460-4a65-b09f-4eaa5c3b0391",
+  "post_id": "8cd5fd4e-71f8-4706-9ebe-4c590602f71a",
+  "business_id": "e450a91d-fb86-48de-a775-dab10b1749b7",
+  "weekly_schedule_id": "30c4b1fb-93a8-40a7-a8dc-8a13948662f3",
   "status": "generated",
-  "platform": "linkedin",
+  "platform": "instagram",
   "day": "Monday",
   "content_type": "Educational",
-  "business_name": "GrowMino AI",
+  "business_name": "Velmora Fashion",
   "caption": "Generated social media caption...",
-  "headline": "Create Weekly Posts From One Brief",
-  "image_url": "",
-  "image_data_url": "data:image/png;base64,...",
-  "image_base64": "...",
+  "headline": "Generated headline",
+  "image_url": "https://xxxxx.supabase.co/storage/v1/object/public/post-media/businesses/e450a91d-fb86-48de-a775-dab10b1749b7/posts/8cd5fd4e-71f8-4706-9ebe-4c590602f71a/image-1.png",
+  "image_urls": [
+    "https://xxxxx.supabase.co/storage/v1/object/public/post-media/businesses/e450a91d-fb86-48de-a775-dab10b1749b7/posts/8cd5fd4e-71f8-4706-9ebe-4c590602f71a/image-1.png"
+  ],
   "image_mime_type": "image/png",
-  "alt_text": "A visual representing Educational content in the AI content automation industry."
+  "alt_text": "Generated alt text"
 }
 ```
 
-Internal debug response:
+This endpoint never returns `image_base64` or `image_data_url`. The canonical image field is `image_urls`; `image_url` is kept as the first image URL for frontend convenience.
+
+Required environment variables:
 
 ```text
-POST /api/v1/posts?debug=true
+DATABASE_URL=postgresql://APP_USER:PASSWORD@127.0.0.1:5432/business-management
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=
+SUPABASE_POST_MEDIA_BUCKET=post-media
+SUPABASE_BUSINESS_ASSETS_BUCKET=business-assets
 ```
-
-Use `debug=true` only for backend/internal QA. It includes prompt, local file path, QA and trace details.
 
 ## Generated Posts
 

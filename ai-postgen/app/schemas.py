@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from enum import Enum
+from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -72,11 +73,9 @@ class GenerateRequest(BaseModel):
         required_fields = [
             "business_name",
             "industry",
-            "offer",
             "target_audience",
             "audience_pain_points",
             "weekly_focus_topic",
-            "tone",
             "brand_personality",
         ]
         for field_name in required_fields:
@@ -84,6 +83,21 @@ class GenerateRequest(BaseModel):
             if not isinstance(value, str) or not value.strip():
                 raise ValueError(f"{field_name} is required and must be non-empty.")
         return self
+
+
+class CreatePostRequest(BaseModel):
+    business_id: UUID
+    weekly_schedule_id: UUID
+    platform: PlatformEnum
+
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    @field_validator("platform", mode="before")
+    @classmethod
+    def normalize_platform(cls, value: object) -> object:
+        if isinstance(value, str):
+            return value.strip().lower()
+        return value
 
 
 class WeeklyContentPlanRequest(BaseModel):
@@ -253,7 +267,9 @@ class GenerateResponse(BaseModel):
 
 
 class PublicGenerateResponse(BaseModel):
-    post_id: str
+    post_id: UUID
+    business_id: UUID
+    weekly_schedule_id: UUID
     status: str = "generated"
     platform: PlatformEnum
     day: DayEnum
@@ -262,8 +278,7 @@ class PublicGenerateResponse(BaseModel):
     caption: str
     headline: str
     image_url: str = ""
-    image_base64: str
-    image_data_url: str
+    image_urls: list[str] = Field(default_factory=list)
     image_mime_type: str = "image/png"
     alt_text: str = ""
 

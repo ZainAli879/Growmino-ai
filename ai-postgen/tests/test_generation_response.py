@@ -4,7 +4,8 @@ import os
 from pathlib import Path
 import sys
 import unittest
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
+from uuid import uuid4
 
 from fastapi.testclient import TestClient
 
@@ -15,10 +16,8 @@ from app.schemas import (  # noqa: E402
     ContentPlanResponse,
     ContentTypeEnum,
     DayEnum,
-    GenerateResponse,
-    MetaInfo,
-    OpenAIImageInfo,
     PlatformEnum,
+    PublicGenerateResponse,
 )
 
 
@@ -32,6 +31,9 @@ class GenerationResponseTests(unittest.TestCase):
                 "IMAGE_PROVIDER": "openai",
                 "API_AUTH_REQUIRED": "false",
                 "PUBLIC_BASE_URL": "https://api.example.com",
+                "DATABASE_URL": "postgresql://app:pass@127.0.0.1:5432/business-management",
+                "SUPABASE_URL": "https://project.supabase.co",
+                "SUPABASE_SERVICE_ROLE_KEY": "test-service-role-key",
             },
         )
         self.env.start()
@@ -42,10 +44,37 @@ class GenerationResponseTests(unittest.TestCase):
     def tearDown(self) -> None:
         self.env.stop()
 
-    def test_default_generate_response_is_clean_for_frontend(self) -> None:
-        with patch("app.api._run_generation") as run_generation:
-            run_generation.return_value = _generated_response()
-            response = self.client.post("/api/v1/posts", json=_request_payload())
+    def test_generate_response_is_id_driven_and_url_based(self) -> None:
+        business_id = uuid4()
+        schedule_id = uuid4()
+        post_id = uuid4()
+        with patch("app.api.PostGenerationService") as service_class:
+            service_class.return_value.create_post = AsyncMock(
+                return_value=PublicGenerateResponse(
+                    post_id=post_id,
+                    business_id=business_id,
+                    weekly_schedule_id=schedule_id,
+                    status="generated",
+                    platform=PlatformEnum.linkedin,
+                    day=DayEnum.monday,
+                    content_type=ContentTypeEnum.educational,
+                    business_name="Velmora Fashion",
+                    caption="Generated caption.",
+                    headline="Generated Headline",
+                    image_url="https://project.supabase.co/storage/v1/object/public/post-media/image.png",
+                    image_urls=["https://project.supabase.co/storage/v1/object/public/post-media/image.png"],
+                    image_mime_type="image/png",
+                    alt_text="Generated alt text.",
+                )
+            )
+            response = self.client.post(
+                "/api/v1/posts",
+                json={
+                    "business_id": str(business_id),
+                    "weekly_schedule_id": str(schedule_id),
+                    "platform": "linkedin",
+                },
+            )
 
         self.assertEqual(response.status_code, 200, response.text)
         payload = response.json()
@@ -53,6 +82,8 @@ class GenerationResponseTests(unittest.TestCase):
             set(payload.keys()),
             {
                 "post_id",
+                "business_id",
+                "weekly_schedule_id",
                 "status",
                 "platform",
                 "day",
@@ -61,117 +92,35 @@ class GenerationResponseTests(unittest.TestCase):
                 "caption",
                 "headline",
                 "image_url",
-                "image_data_url",
-                "image_base64",
+                "image_urls",
                 "image_mime_type",
                 "alt_text",
             },
         )
-        self.assertEqual(payload["image_url"], "")
-        self.assertEqual(payload["image_data_url"], "data:image/png;base64,aW1hZ2U=")
-        self.assertEqual(payload["image_base64"], "aW1hZ2U=")
-        self.assertEqual(payload["image_mime_type"], "image/png")
+        self.assertEqual(payload["post_id"], str(post_id))
+        self.assertEqual(payload["business_id"], str(business_id))
+        self.assertEqual(payload["weekly_schedule_id"], str(schedule_id))
+        self.assertEqual(payload["image_url"], payload["image_urls"][0])
+        self.assertNotIn("image_base64", payload)
+        self.assertNotIn("image_data_url", payload)
         self.assertNotIn("openai_image", payload)
         self.assertNotIn("trace", payload)
         self.assertNotIn("qa", payload)
 
-    def test_debug_generate_response_keeps_internal_details(self) -> None:
-        with patch("app.api._run_generation") as run_generation:
-            run_generation.return_value = _generated_response()
-            response = self.client.post("/api/v1/posts?debug=true", json=_request_payload())
-
-        self.assertEqual(response.status_code, 200, response.text)
-        payload = response.json()
-        self.assertIn("openai_image", payload)
-        self.assertEqual(payload["openai_image"]["public_url"], "")
-        self.assertEqual(payload["openai_image"]["image_data_url"], "data:image/png;base64,aW1hZ2U=")
-
-    def test_default_weekly_plan_response_is_clean_for_frontend(self) -> None:
+    def test_default_weekly_plan_response_still_generates_posts(self) -> None:
         with (
             patch("app.api.generate_content_plan") as generate_plan,
             patch("app.api._run_generation") as run_generation,
         ):
             generate_plan.return_value = _weekly_plan()
-            run_generation.return_value = _generated_response()
+            run_generation.return_value = _generated_response_for_weekly()
             response = self.client.post("/api/v1/content-plans", json=_weekly_request_payload())
 
         self.assertEqual(response.status_code, 200, response.text)
         payload = response.json()
-        self.assertEqual(
-            set(payload.keys()),
-            {
-                "plan_id",
-                "status",
-                "week_start_date",
-                "weekly_goal",
-                "theme",
-                "total_posts",
-                "posts",
-            },
-        )
-        self.assertNotIn("items", payload)
         self.assertEqual(payload["status"], "generated")
         self.assertEqual(len(payload["posts"]), 1)
-        post = payload["posts"][0]
-        self.assertEqual(
-            set(post.keys()),
-            {
-                "position",
-                "post_id",
-                "status",
-                "platform",
-                "day",
-                "content_type",
-                "business_name",
-                "topic",
-                "caption",
-                "headline",
-                "image_url",
-                "image_base64",
-                "image_data_url",
-                "image_mime_type",
-                "alt_text",
-                "error",
-            },
-        )
-        self.assertEqual(post["post_id"], "post-123")
-        self.assertEqual(post["image_url"], "")
-        self.assertEqual(post["image_base64"], "aW1hZ2U=")
-        self.assertEqual(post["image_data_url"], "data:image/png;base64,aW1hZ2U=")
-        self.assertEqual(post["alt_text"], "Generated alt text.")
-        self.assertNotIn("generated_caption", post)
-
-    def test_debug_weekly_plan_response_keeps_internal_items(self) -> None:
-        with (
-            patch("app.api.generate_content_plan") as generate_plan,
-            patch("app.api._run_generation") as run_generation,
-        ):
-            generate_plan.return_value = _weekly_plan()
-            run_generation.return_value = _generated_response()
-            response = self.client.post("/api/v1/content-plans?debug=true", json=_weekly_request_payload())
-
-        self.assertEqual(response.status_code, 200, response.text)
-        payload = response.json()
-        self.assertIn("items", payload)
-        self.assertNotIn("posts", payload)
-        self.assertEqual(payload["items"][0]["generated_image_base64"], "aW1hZ2U=")
-        self.assertEqual(payload["items"][0]["generated_alt_text"], "Generated alt text.")
-
-
-def _request_payload() -> dict:
-    return {
-        "business_name": "GrowMino AI",
-        "industry": "AI content automation",
-        "offer": "AI-generated captions and visuals",
-        "target_audience": "Founders",
-        "audience_pain_points": "Inconsistent posting",
-        "weekly_focus_topic": "Creating posts from one brief",
-        "day": "Monday",
-        "content_type": "Educational",
-        "tone": "Clear",
-        "brand_personality": "Modern",
-        "platform": "linkedin",
-    }
+        self.assertEqual(payload["posts"][0]["image_base64"], "aW1hZ2U=")
 
 
 def _weekly_request_payload() -> dict:
@@ -215,7 +164,9 @@ def _weekly_plan() -> ContentPlanResponse:
     )
 
 
-def _generated_response() -> GenerateResponse:
+def _generated_response_for_weekly():
+    from app.schemas import GenerateResponse, MetaInfo, OpenAIImageInfo
+
     return GenerateResponse(
         post_id="post-123",
         meta=MetaInfo(

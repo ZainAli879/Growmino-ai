@@ -11,9 +11,27 @@
     { "key": "fb_page_token", "value": "" },
     { "key": "ig_account_id", "value": "" },
     { "key": "ig_access_token", "value": "" },
+    { "key": "generation_business_id", "value": "e450a91d-fb86-48de-a775-dab10b1749b7" },
+    { "key": "generation_weekly_schedule_id", "value": "30c4b1fb-93a8-40a7-a8dc-8a13948662f3" },
     { "key": "public_image_url", "value": "https://placehold.co/1080x1080.jpg?text=GrowMino+Test" }
   ],
   "item": [
+    {
+      "name": "Generate Post From Business Schedule",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "X-Growmino-User-Id", "value": "{{user_id}}" },
+          { "key": "X-Growmino-Business-Id", "value": "{{business_id}}" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"business_id\": \"{{generation_business_id}}\",\n  \"weekly_schedule_id\": \"{{generation_weekly_schedule_id}}\",\n  \"platform\": \"instagram\"\n}"
+        },
+        "url": "{{base_url}}/api/v1/posts"
+      }
+    },
     {
       "name": "Facebook Text",
       "request": {
