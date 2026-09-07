@@ -18,14 +18,11 @@ from app.prompt_library import (
     CAPTION_TEMPLATE,
     CONTENT_TYPE_RULES,
     IMAGE_PROMPT_FROM_CAPTION_TEMPLATE,
-    IMAGE_TEXT_LAYOUT_OPTIONS,
     PLATFORM_RULES,
     WEEKLY_CONTENT_PLAN_TEMPLATE,
 )
 from app.schemas import ContentPlanItem, ContentPlanResponse, ContentTypeEnum, DayEnum, GenerateRequest, PlatformEnum, WeeklyContentPlanRequest
 
-_image_layout_lock = threading.Lock()
-_image_layout_idx = 0
 _headline_history_lock = threading.Lock()
 _headline_history: deque[str] = deque(maxlen=60)
 
@@ -333,14 +330,6 @@ def _parse_weekly_plan(raw: str, request: WeeklyContentPlanRequest, plan_id: str
     )
 
 
-def _next_image_text_layout() -> str:
-    global _image_layout_idx
-    with _image_layout_lock:
-        layout = IMAGE_TEXT_LAYOUT_OPTIONS[_image_layout_idx % len(IMAGE_TEXT_LAYOUT_OPTIONS)]
-        _image_layout_idx += 1
-    return layout
-
-
 def generate_caption_with_retry(
     payload: GenerateRequest,
     api_key: str,
@@ -484,8 +473,6 @@ def generate_image_prompt_from_caption(
     base_url: str | None = None,
     default_headers: dict[str, str] | None = None,
 ) -> str:
-    safe_headline = _normalize_text(headline, max_words=10) or "Business Growth"
-    selected_layout = _next_image_text_layout()
     chain = _build_image_prompt_chain(
         model_name=model_name,
         api_key=api_key,
@@ -505,8 +492,6 @@ def generate_image_prompt_from_caption(
             "tone": payload.tone,
             "brand_personality": payload.brand_personality,
             "caption": caption,
-            "headline": safe_headline,
-            "text_layout_style": selected_layout,
             "logo_instruction": logo_instruction,
         }
     ).strip()

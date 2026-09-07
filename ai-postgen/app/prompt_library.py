@@ -107,7 +107,7 @@ Formatting requirements:
 
 Output JSON with exactly these keys:
 - "caption": full post caption text
-- "headline": one ultra-short hook/headline that summarizes the post and can be used as optional visual text.
+- "headline": one ultra-short hook/headline that summarizes the post for frontend/card display only.
 
 Headline quality rules:
 - 3-8 words ONLY. Hyper-concise.
@@ -117,25 +117,6 @@ Headline quality rules:
 """.strip()
 
 NEGATIVE_IMAGE_PROMPT = "boring stock photo, generic corporate, 2010s aesthetic, flat lighting, artificial CGI look, AI artifacts, plastic skin, cluttered UI, messy text, watermarks, signature, cheesy models, low resolution, bad anatomy, overused marketing templates"
-
-IMAGE_TEXT_LAYOUT_OPTIONS: list[str] = [
-    "hyper-legible brutalist typography overlapping abstract 3D elements",
-    "sleek semi-transparent dark-glass visor overlay with crisp white type",
-    "fluid morphing typography deeply integrated into environmental shadows",
-    "high-end editorial crop with floating oversized sans-serif letters",
-    "minimalist Japanese magazine layout using vertical and horizontal text interplay",
-    "cyber-chic glitch-art text frames with chromatic aberration",
-    "elegant Bauhaus-inspired geometric text containment with striking primary colors",
-    "translucent holographic badge with embossed chrome-finish lettering",
-    "clean micro-typography style pushing the headline into deliberate negative space",
-    "layered collage aesthetic masking text underneath textured paper edges",
-    "bold anti-design layout using clashing hyper-saturated text blocks",
-    "ultra-clean corporate tech lockup with a glowing neon accent underline",
-    "cinematic golden-hour light illuminating embossed text naturally tracked into the scene",
-    "monolithic metallic bold letters resting directly on surfaces in the scene",
-    "minimal tech-HUD overlay with sharp monospaced data-driven typography",
-    "editorial fashion-style ultra-thin serif type cascading over soft gradients"
-]
 
 IMAGE_PROMPT_FROM_CAPTION_TEMPLATE = """
 You are a senior creative director for social media ads and organic business content.
@@ -157,20 +138,18 @@ Business context:
 Caption:
 {caption}
 
-Optional post hook:
-{headline}
-
 Prompt requirements:
 - First infer the core message of the caption, the audience pain, the promised transformation, and the best scroll-stopping visual angle.
 - Decide the strongest visual format for this specific post: realistic editorial scene, lifestyle photo, productized workflow visual, infographic, comparison graphic, symbolic metaphor, clean brand image, or hybrid photo-plus-graphic layout.
-- Do not force the optional hook into the image. Use it only if it is genuinely the best visual text.
-- Only include text when it improves comprehension or stopping power. If text is useful, choose 1-2 very short text elements derived from the caption/business context; no paragraphs, no hashtags, no CTA blocks, no made-up claims.
+- Do not create a poster from the generated headline. The headline belongs to the app UI, not the image prompt.
+- Let the caption and business context decide whether the image needs text at all.
+- Only include text when it genuinely improves comprehension or stopping power. If text is useful, create 1-2 natural, very short text elements from the caption's core idea; no paragraphs, no hashtags, no CTA blocks, no made-up claims.
+- Match the visual tone to the actual business category and audience. Fashion should feel like a premium fashion/lifestyle campaign, real estate should feel aspirational and local, dental/healthcare should feel warm and trustworthy, SaaS should feel practical and modern, and service businesses should feel human and outcome-focused.
 - If this is educational, tactical, automation, or process-driven content, an infographic, simple diagram, workflow map, before/after comparison, or annotated visual is allowed.
 - If this is founder authority, testimonial, or case-study content, prioritize realistic human/editorial imagery unless a compact proof-style graphic is clearly stronger.
 - If proof assets are missing, do not invent numbers, client names, testimonials, awards, charts, dashboards, or outcomes.
 - The image MUST be highly relevant to the business, audience, platform, and caption. Avoid generic office stock imagery and unrelated abstract scenes.
 - Include concrete visual direction: subject, setting, foreground/background, camera angle or graphic layout, lighting, color mood, focal hierarchy, and negative space.
-- Use this optional 2026 layout inspiration only when text, diagram, or infographic elements are appropriate: "{text_layout_style}".
 - {logo_instruction}
 - Business name is context only. Do not render the business name, app name, company wordmark, initials, icon, badge, or fake logo unless it is part of an exact externally provided logo instruction.
 - Do not add random UI text, fake app screens, fake metrics, fake client names, fake awards, watermarks, signatures, or unrelated labels.
