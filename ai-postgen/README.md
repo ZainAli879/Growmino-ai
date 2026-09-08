@@ -227,6 +227,7 @@ docs/GrowMino_LinkedIn_Personal_Profile_Postman_Collection.json
 - `POST /api/v1/content-plans` uses the same generation/storage/persistence pipeline for every configured row in `business_weekly_schedules`.
 - Content plan request body: `business_id`, `week_start_date`
 - Content plan responses return Supabase URLs only; they never return `image_base64` or `image_data_url`.
+- Image prompts are business-aware: the creative direction uses the business category, offer, audience pain, topic, CTA preference, proof assets, caption, platform, and logo mode before calling the image model.
 - LinkedIn OAuth state, encrypted profile tokens, and scheduled LinkedIn jobs use `LINKEDIN_STORE_FILE` for backend runtime state.
 - For production, replace `app/linkedin_store.py` with the platform database implementation while keeping the same function contracts.
 

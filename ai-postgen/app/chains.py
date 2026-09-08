@@ -463,6 +463,20 @@ def generate_weekly_content_plan(
     return _parse_weekly_plan(raw, request, plan_id)
 
 
+def _append_image_quality_contract(prompt: str, payload: GenerateRequest) -> str:
+    business_focus = payload.offer or payload.weekly_focus_topic or payload.industry
+    rules = [
+        "Final creative quality contract:",
+        f"- Make the visual unmistakably specific to {payload.industry} and the offer/topic: {business_focus}.",
+        "- The product, service moment, customer outcome, or business transformation must be the main visual idea.",
+        "- Avoid generic stock-photo scenes, unrelated smiling groups, vague lifestyle imagery, and bland motivational poster design.",
+        "- If people appear, they must actively demonstrate the product, service, audience pain, or desired outcome.",
+        "- If overlay text appears, keep it to one or two short campaign-quality phrases derived from the caption, not generic adjectives.",
+        "- Keep the image premium, platform-ready, mobile-readable, and commercially useful for a business trying to grow.",
+    ]
+    return f"{prompt.strip()}\n\n" + "\n".join(rules)
+
+
 def generate_image_prompt_from_caption(
     payload: GenerateRequest,
     caption: str,
@@ -491,8 +505,10 @@ def generate_image_prompt_from_caption(
             "platform": payload.platform.value,
             "tone": payload.tone,
             "brand_personality": payload.brand_personality,
+            "cta_preference": payload.cta_preference,
+            "proof_assets": payload.proof_assets or "none provided",
             "caption": caption,
             "logo_instruction": logo_instruction,
         }
     ).strip()
-    return prompt
+    return _append_image_quality_contract(prompt, payload)
