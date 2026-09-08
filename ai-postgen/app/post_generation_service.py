@@ -21,7 +21,17 @@ from app.database import (
     image_urls_json,
 )
 from app.openai_clients import generate_caption, generate_image
-from app.schemas import ContentTypeEnum, CreatePostRequest, DayEnum, GenerateRequest, PlatformEnum, PublicGenerateResponse
+from app.schemas import (
+    ContentTypeEnum,
+    CreatePostRequest,
+    DayEnum,
+    GenerateRequest,
+    PlatformEnum,
+    PublicContentPlanPost,
+    PublicContentPlanResponse,
+    PublicGenerateResponse,
+    WeeklyContentPlanRequest,
+)
 from app.storage import StorageConfigurationError, StorageService, StorageUnavailableError, SupabaseStorageService
 from app.validators import validate_day_type_match
 
@@ -87,8 +97,98 @@ class PostGenerationService:
         self._storage_service = storage_service or SupabaseStorageService(settings)
 
     async def create_post(self, payload: CreatePostRequest, auth: AuthContext) -> PublicGenerateResponse:
+        self._assert_business_authorized(payload.business_id, auth)
         context = await asyncio.to_thread(self._load_and_validate_context, payload)
-        ai_payload = await asyncio.to_thread(self._build_ai_payload, context, payload.platform)
+        return await self._create_post_from_context(context=context, platform=payload.platform, auth=auth)
+
+    async def create_content_plan(
+        self,
+        payload: WeeklyContentPlanRequest,
+        auth: AuthContext,
+        *,
+        plan_id: str,
+    ) -> PublicContentPlanResponse:
+        self._assert_business_authorized(payload.business_id, auth)
+        contexts = await asyncio.to_thread(self._load_weekly_contexts, payload.business_id)
+
+        posts: list[PublicContentPlanPost] = []
+        position = 1
+        for context in contexts:
+            platforms = [platform for platform in _supported_platforms(context.platforms)]
+            for platform in platforms:
+                try:
+                    generated = await self._create_post_from_context(
+                        context=context,
+                        platform=platform,
+                        auth=auth,
+                    )
+                    posts.append(
+                        PublicContentPlanPost(
+                            position=position,
+                            post_id=generated.post_id,
+                            status=generated.status,
+                            platform=generated.platform,
+                            day=generated.day,
+                            content_type=generated.content_type,
+                            topic=context.weekly_topic,
+                            caption=generated.caption,
+                            headline=generated.headline,
+                            image_url=generated.image_url,
+                            image_urls=generated.image_urls,
+                            image_mime_type=generated.image_mime_type,
+                            alt_text=generated.alt_text,
+                            error="",
+                        )
+                    )
+                except PostGenerationServiceError as exc:
+                    posts.append(
+                        PublicContentPlanPost(
+                            position=position,
+                            post_id=None,
+                            status="failed",
+                            platform=platform,
+                            day=DAY_BY_NUMBER.get(context.day_of_week, DayEnum.monday),
+                            content_type=_safe_parse_content_type(context.content_type),
+                            topic=context.weekly_topic,
+                            error=exc.message,
+                        )
+                    )
+                except Exception:
+                    posts.append(
+                        PublicContentPlanPost(
+                            position=position,
+                            post_id=None,
+                            status="failed",
+                            platform=platform,
+                            day=DAY_BY_NUMBER.get(context.day_of_week, DayEnum.monday),
+                            content_type=_safe_parse_content_type(context.content_type),
+                            topic=context.weekly_topic,
+                            error="Unexpected generation error.",
+                        )
+                    )
+                position += 1
+
+        if not posts:
+            raise PostGenerationServiceError(422, "No supported platforms are configured for this business schedule.")
+        successful = sum(1 for post in posts if post.status == "generated")
+        status = "generated" if successful == len(posts) else "partially_generated" if successful else "failed"
+        return PublicContentPlanResponse(
+            plan_id=plan_id,
+            status=status,
+            week_start_date=payload.week_start_date.isoformat(),
+            total_posts=len(posts),
+            posts=posts,
+        )
+
+    async def _create_post_from_context(
+        self,
+        *,
+        context: BusinessGenerationContext,
+        platform: PlatformEnum,
+        auth: AuthContext,
+    ) -> PublicGenerateResponse:
+        self._validate_context_for_platform(context, platform)
+        ai_payload = await asyncio.to_thread(self._build_ai_payload, context, platform)
         caption_result = await asyncio.to_thread(generate_caption, ai_payload, self._settings)
         image_result = await asyncio.to_thread(
             generate_image,
@@ -106,7 +206,7 @@ class PostGenerationService:
         post_id = uuid4()
         upload = await asyncio.to_thread(
             self._upload_generated_image,
-            business_id=payload.business_id,
+            business_id=context.business_id,
             post_id=post_id,
             image_bytes=image_bytes,
             mime_type=image_result.image_mime_type,
@@ -116,7 +216,9 @@ class PostGenerationService:
             await asyncio.to_thread(
                 self._insert_post_record,
                 post_id=post_id,
-                payload=payload,
+                business_id=context.business_id,
+                weekly_schedule_id=context.weekly_schedule_id,
+                platform=platform,
                 context=context,
                 auth=auth,
                 caption=caption_result.caption,
@@ -138,10 +240,10 @@ class PostGenerationService:
 
         return PublicGenerateResponse(
             post_id=post_id,
-            business_id=payload.business_id,
-            weekly_schedule_id=payload.weekly_schedule_id,
+            business_id=context.business_id,
+            weekly_schedule_id=context.weekly_schedule_id,
             status="generated",
-            platform=payload.platform,
+            platform=platform,
             day=DAY_BY_NUMBER[context.day_of_week],
             content_type=_parse_content_type(context.content_type),
             business_name=context.business_name,
@@ -177,7 +279,26 @@ class PostGenerationService:
 
         if context is None:
             raise PostGenerationServiceError(422, "Business generation context is incomplete.")
-        if payload.platform.value not in context.platforms:
+        self._validate_context_for_platform(context, payload.platform)
+        return context
+
+    def _load_weekly_contexts(self, business_id: UUID) -> list[BusinessGenerationContext]:
+        try:
+            if not self._context_repository.business_exists(business_id=business_id):
+                raise PostGenerationServiceError(404, "Business not found.")
+            contexts = self._context_repository.fetch_weekly_generation_contexts(business_id=business_id)
+        except PostGenerationServiceError:
+            raise
+        except DatabaseConfigurationError as exc:
+            raise PostGenerationServiceError(503, str(exc)) from exc
+        except DatabaseUnavailableError as exc:
+            raise PostGenerationServiceError(503, "Database is unavailable.") from exc
+        if not contexts:
+            raise PostGenerationServiceError(404, "No weekly schedules found for this business.")
+        return contexts
+
+    def _validate_context_for_platform(self, context: BusinessGenerationContext, platform: PlatformEnum) -> None:
+        if platform.value not in context.platforms:
             raise PostGenerationServiceError(422, "Selected platform is not configured for this weekly schedule.")
         if context.day_of_week not in DAY_BY_NUMBER:
             raise PostGenerationServiceError(422, "Weekly schedule day_of_week must be between 1 and 7.")
@@ -193,7 +314,6 @@ class PostGenerationService:
             raise PostGenerationServiceError(422, "Business generation context is missing brand_personality.")
         content_type = _parse_content_type(context.content_type)
         validate_day_type_match(DAY_BY_NUMBER[context.day_of_week], content_type)
-        return context
 
     def _build_ai_payload(self, context: BusinessGenerationContext, platform: PlatformEnum) -> GenerateRequest:
         return GenerateRequest(
@@ -271,7 +391,9 @@ class PostGenerationService:
         self,
         *,
         post_id: UUID,
-        payload: CreatePostRequest,
+        business_id: UUID,
+        weekly_schedule_id: UUID,
+        platform: PlatformEnum,
         context: BusinessGenerationContext,
         auth: AuthContext,
         caption: str,
@@ -285,9 +407,9 @@ class PostGenerationService:
             self._post_repository.insert_generated_post(
                 PersistGeneratedPostInput(
                     post_id=post_id,
-                    business_id=payload.business_id,
-                    weekly_schedule_id=payload.weekly_schedule_id,
-                    platform=payload.platform.value,
+                    business_id=business_id,
+                    weekly_schedule_id=weekly_schedule_id,
+                    platform=platform.value,
                     title=headline,
                     description=caption,
                     hashtags="",
@@ -319,6 +441,15 @@ class PostGenerationService:
         except DatabaseUnavailableError as exc:
             raise PostGenerationServiceError(503, "Database is unavailable.") from exc
 
+    def _assert_business_authorized(self, business_id: UUID, auth: AuthContext) -> None:
+        auth_business_id = _uuid_or_none(auth.business_id)
+        if auth_business_id is None:
+            if self._settings.allow_dev_auth_headers:
+                return
+            raise PostGenerationServiceError(401, "Authenticated business context is invalid.")
+        if auth_business_id != business_id:
+            raise PostGenerationServiceError(403, "Authenticated user is not authorized for this business.")
+
 
 def _parse_content_type(value: str) -> ContentTypeEnum:
     normalized = " ".join(value.replace("-", " ").split()).strip().lower()
@@ -327,6 +458,25 @@ def _parse_content_type(value: str) -> ContentTypeEnum:
     if content_type is None:
         raise PostGenerationServiceError(422, "Unsupported content type configured on weekly schedule.")
     return content_type
+
+
+def _safe_parse_content_type(value: str) -> ContentTypeEnum:
+    try:
+        return _parse_content_type(value)
+    except PostGenerationServiceError:
+        return ContentTypeEnum.educational
+
+
+def _supported_platforms(values: list[str]) -> list[PlatformEnum]:
+    supported: list[PlatformEnum] = []
+    for value in values:
+        try:
+            platform = PlatformEnum(value)
+        except ValueError:
+            continue
+        if platform not in supported:
+            supported.append(platform)
+    return supported
 
 
 def _find_local_upload(logo_path: str, uploads_root: str) -> Path | None:

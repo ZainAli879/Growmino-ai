@@ -17,6 +17,8 @@ from app.schemas import (  # noqa: E402
     ContentTypeEnum,
     DayEnum,
     PlatformEnum,
+    PublicContentPlanPost,
+    PublicContentPlanResponse,
     PublicGenerateResponse,
 )
 
@@ -107,20 +109,52 @@ class GenerationResponseTests(unittest.TestCase):
         self.assertNotIn("trace", payload)
         self.assertNotIn("qa", payload)
 
-    def test_default_weekly_plan_response_still_generates_posts(self) -> None:
-        with (
-            patch("app.api.generate_content_plan") as generate_plan,
-            patch("app.api._run_generation") as run_generation,
-        ):
-            generate_plan.return_value = _weekly_plan()
-            run_generation.return_value = _generated_response_for_weekly()
-            response = self.client.post("/api/v1/content-plans", json=_weekly_request_payload())
+    def test_weekly_plan_response_is_id_driven_and_url_based(self) -> None:
+        business_id = uuid4()
+        post_id = uuid4()
+        with patch("app.api.PostGenerationService") as service_class:
+            service_class.return_value.create_content_plan = AsyncMock(
+                return_value=PublicContentPlanResponse(
+                    plan_id="plan-123",
+                    status="generated",
+                    week_start_date="2026-09-09",
+                    total_posts=1,
+                    posts=[
+                        PublicContentPlanPost(
+                            position=1,
+                            post_id=post_id,
+                            status="generated",
+                            platform=PlatformEnum.linkedin,
+                            day=DayEnum.monday,
+                            content_type=ContentTypeEnum.educational,
+                            topic="Teaching better posting systems",
+                            caption="Generated caption.",
+                            headline="Generated Headline",
+                            image_url="https://project.supabase.co/storage/v1/object/public/post-media/image.png",
+                            image_urls=["https://project.supabase.co/storage/v1/object/public/post-media/image.png"],
+                            image_mime_type="image/png",
+                            alt_text="Generated alt text.",
+                            error="",
+                        )
+                    ],
+                )
+            )
+            response = self.client.post(
+                "/api/v1/content-plans",
+                json={
+                    "business_id": str(business_id),
+                    "week_start_date": "2026-09-09",
+                },
+            )
 
         self.assertEqual(response.status_code, 200, response.text)
         payload = response.json()
         self.assertEqual(payload["status"], "generated")
         self.assertEqual(len(payload["posts"]), 1)
-        self.assertEqual(payload["posts"][0]["image_base64"], "aW1hZ2U=")
+        self.assertEqual(payload["posts"][0]["image_url"], payload["posts"][0]["image_urls"][0])
+        self.assertNotIn("image_base64", payload["posts"][0])
+        self.assertNotIn("image_data_url", payload["posts"][0])
+        self.assertNotIn("base64", response.text)
 
 
 def _weekly_request_payload() -> dict:

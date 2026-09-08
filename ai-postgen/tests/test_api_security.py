@@ -170,34 +170,16 @@ class ApiSecurityTests(unittest.TestCase):
 
 def _post_payload() -> dict:
     return {
-        "business_name": "GrowMino AI",
-        "industry": "AI content automation",
-        "offer": "AI-generated captions and visuals",
-        "target_audience": "Founders",
-        "audience_pain_points": "Inconsistent posting",
-        "weekly_focus_topic": "Creating posts from one brief",
-        "day": "Monday",
-        "content_type": "Educational",
-        "tone": "Clear",
-        "brand_personality": "Modern",
+        "business_id": str(uuid4()),
+        "weekly_schedule_id": str(uuid4()),
         "platform": "linkedin",
     }
 
 
 def _plan_payload() -> dict:
     return {
-        "business_name": "GrowMino AI",
-        "industry": "AI content automation",
-        "offer": "AI-generated captions and visuals",
-        "target_audience": "Founders",
-        "audience_pain_points": "Inconsistent posting",
-        "tone": "Clear",
-        "brand_personality": "Modern",
+        "business_id": str(uuid4()),
         "week_start_date": "2026-09-01",
-        "weekly_goal": "Educate prospects",
-        "theme": "AI automation",
-        "platforms": ["linkedin"],
-        "posts_count": 1,
     }
 
 

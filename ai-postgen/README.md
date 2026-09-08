@@ -219,11 +219,14 @@ docs/GrowMino_LinkedIn_Personal_Profile_Postman_Collection.json
 
 ## Generated Post Persistence
 
-`POST /api/v1/posts` is the production generated-post endpoint. It reads business, category, marketing profile, and weekly schedule data from the `business-management` PostgreSQL database, generates the caption/image with the existing AI implementation, uploads the image to Supabase Storage, inserts the generated post into `public.posts`, and returns public image URL fields only.
+`POST /api/v1/posts` is the production generated-post endpoint. It reads business, category, marketing profile, and one weekly schedule row from the `business-management` PostgreSQL database, generates the caption/image with the existing AI implementation, uploads the image to Supabase Storage, inserts the generated post into `public.posts`, and returns public image URL fields only.
 
 - Request body: `business_id`, `weekly_schedule_id`, `platform`
 - Response image fields: `image_url` and `image_urls`
 - The API no longer returns Base64 for `POST /api/v1/posts`
+- `POST /api/v1/content-plans` uses the same generation/storage/persistence pipeline for every configured row in `business_weekly_schedules`.
+- Content plan request body: `business_id`, `week_start_date`
+- Content plan responses return Supabase URLs only; they never return `image_base64` or `image_data_url`.
 - LinkedIn OAuth state, encrypted profile tokens, and scheduled LinkedIn jobs use `LINKEDIN_STORE_FILE` for backend runtime state.
 - For production, replace `app/linkedin_store.py` with the platform database implementation while keeping the same function contracts.
 

@@ -23,10 +23,9 @@ from app.linkedin_api import router as linkedin_router
 from app.linkedin_client import build_authorization_url, create_state_token, oauth_expiry
 from app.linkedin_store import get_publish_job
 from app.linkedin_store import insert_oauth_state
-from app.openai_clients import generate_caption, generate_content_plan, generate_image
+from app.openai_clients import generate_caption, generate_image
 from app.post_generation_service import PostGenerationService, PostGenerationServiceError
 from app.schemas import (
-    ContentPlanResponse,
     CreatePostRequest,
     ErrorResponse,
     GenerateRequest,
@@ -37,7 +36,6 @@ from app.schemas import (
     MetaInfo,
     OpenAIImageInfo,
     PublicContentPlanResponse,
-    PublicContentPlanPost,
     PublicGenerateResponse,
     QAInfo,
     TraceInfo,
@@ -256,15 +254,22 @@ async def get_post_endpoint(
 
 @app.post(
     "/api/v1/content-plans",
-    response_model=PublicContentPlanResponse | ContentPlanResponse,
-    responses={400: {"model": ErrorResponse}, 401: {"model": ErrorResponse}, 429: {"model": ErrorResponse}, 502: {"model": ErrorResponse}},
+    response_model=PublicContentPlanResponse,
+    responses={
+        400: {"model": ErrorResponse},
+        401: {"model": ErrorResponse},
+        403: {"model": ErrorResponse},
+        404: {"model": ErrorResponse},
+        422: {"model": ErrorResponse},
+        429: {"model": ErrorResponse},
+        502: {"model": ErrorResponse},
+        503: {"model": ErrorResponse},
+    },
 )
 async def create_content_plan_endpoint(
     payload: WeeklyContentPlanRequest,
-    request: Request,
-    debug: bool = Query(default=False, description="Return internal planning and generated_* fields."),
     auth: AuthContext = Depends(require_auth_context),
-) -> PublicContentPlanResponse | ContentPlanResponse:
+) -> PublicContentPlanResponse:
     try:
         settings = get_settings()
     except Exception as exc:
@@ -272,23 +277,17 @@ async def create_content_plan_endpoint(
 
     plan_id = str(uuid4())
     try:
-        recent_posts = "none"
-        plan = await asyncio.wait_for(
-            asyncio.to_thread(generate_content_plan, payload, settings, plan_id, recent_posts),
+        service = PostGenerationService(settings)
+        return await asyncio.wait_for(
+            service.create_content_plan(payload, auth, plan_id=plan_id),
             timeout=settings.request_timeout_seconds,
         )
-        await _generate_posts_for_plan(plan, payload, settings)
-        for item in plan.items:
-            if item.generated_image_url:
-                item.generated_image_url = _absolute_public_url(item.generated_image_url, request, settings)
-        plan.status = "generated" if all(item.generation_status == "completed" for item in plan.items) else "partially_generated"
-        if debug:
-            return plan
-        return _public_content_plan_response(plan, payload)
     except asyncio.TimeoutError as exc:
         raise HTTPException(status_code=502, detail="Content plan generation timed out. Please retry.") from exc
     except OpenAIError as exc:
         raise HTTPException(status_code=502, detail="OpenAI service error while generating content plan.") from exc
+    except PostGenerationServiceError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.message) from exc
     except RuntimeError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     except Exception as exc:
@@ -414,114 +413,6 @@ async def _run_generation(payload: GenerateRequest, settings: Settings) -> Gener
         trace=trace,
     )
     return response
-
-
-async def _generate_posts_for_plan(
-    plan: ContentPlanResponse,
-    payload: WeeklyContentPlanRequest,
-    settings: Settings,
-) -> None:
-    for item in plan.items:
-        item.generation_status = "generating"
-        generation_payload = GenerateRequest(
-            business_name=payload.business_name,
-            industry=payload.industry,
-            offer=payload.offer,
-            target_audience=payload.target_audience,
-            audience_pain_points=payload.audience_pain_points,
-            weekly_focus_topic=(
-                f"{item.topic}. Angle: {item.angle}. "
-                f"Hook direction: {item.hook_direction}. "
-                f"Visual direction: {item.visual_direction}"
-            ),
-            day=item.day,
-            content_type=item.content_type,
-            tone=payload.tone,
-            brand_personality=payload.brand_personality,
-            cta_preference=item.cta_direction or payload.cta_preference,
-            proof_assets=payload.proof_assets,
-            company_logo_url=payload.company_logo_url,
-            platform=item.platform,
-        )
-
-        try:
-            generated = await _run_generation(generation_payload, settings)
-            item.generation_status = "completed"
-            item.generated_post_id = generated.post_id
-            item.generated_caption = generated.caption
-            item.generated_headline = generated.headline
-            item.generated_image_url = generated.openai_image.public_url
-            item.generated_image_data_url = generated.openai_image.image_data_url
-            item.generated_image_base64 = generated.openai_image.image_base64
-            item.generated_image_mime_type = generated.openai_image.image_mime_type
-            item.generated_alt_text = generated.openai_image.alt_text
-            item.generation_error = ""
-        except Exception as exc:
-            item.generation_status = "failed"
-            item.generation_error = str(exc)
-
-
-def _public_generate_response(
-    result: GenerateResponse,
-    request: Request,
-    settings: Settings,
-) -> PublicGenerateResponse:
-    return PublicGenerateResponse(
-        post_id=result.post_id,
-        platform=result.meta.platform,
-        day=result.meta.day,
-        content_type=result.meta.content_type,
-        business_name=result.meta.business_name,
-        caption=result.caption,
-        headline=result.headline,
-        image_url=result.openai_image.public_url,
-        image_data_url=result.openai_image.image_data_url,
-        image_base64=result.openai_image.image_base64,
-        image_mime_type=result.openai_image.image_mime_type,
-        alt_text=result.openai_image.alt_text,
-    )
-
-
-def _public_content_plan_response(
-    plan: ContentPlanResponse,
-    payload: WeeklyContentPlanRequest,
-) -> PublicContentPlanResponse:
-    return PublicContentPlanResponse(
-        plan_id=plan.plan_id,
-        status=plan.status,
-        week_start_date=plan.week_start_date,
-        weekly_goal=plan.weekly_goal,
-        theme=plan.theme,
-        total_posts=plan.total_posts,
-        posts=[
-            PublicContentPlanPost(
-                position=item.position,
-                post_id=item.generated_post_id,
-                status=item.generation_status,
-                platform=item.platform,
-                day=item.day,
-                content_type=item.content_type,
-                business_name=payload.business_name,
-                topic=item.topic,
-                caption=item.generated_caption,
-                headline=item.generated_headline,
-                image_url=item.generated_image_url,
-                image_base64=item.generated_image_base64,
-                image_data_url=item.generated_image_data_url,
-                image_mime_type=item.generated_image_mime_type,
-                alt_text=item.generated_alt_text,
-                error=item.generation_error,
-            )
-            for item in plan.items
-        ],
-    )
-
-
-def _absolute_public_url(value: str, request: Request, settings: Settings) -> str:
-    if value.startswith(("http://", "https://")):
-        return value
-    base_url = settings.public_base_url or str(request.base_url).rstrip("/")
-    return f"{base_url}/{value.lstrip('/')}"
 
 
 def _request_id_from_state(request: Request) -> str:

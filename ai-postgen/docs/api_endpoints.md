@@ -200,27 +200,18 @@ Returns either:
 
 ### `POST /api/v1/content-plans`
 
-Creates a weekly content plan and automatically generates the planned posts.
+Generates all configured weekly schedule posts for a business.
+
+The backend reads `businesses`, `categories`, `subcategories`, `business_marketing_profiles`, and all `business_weekly_schedules` rows for the supplied business. Each scheduled day uses its own schedule values for topic, content type, tone, pain point, offer, CTA, proof assets, and platforms.
+
+For each configured schedule row and platform, the backend generates the caption/image, uploads the image to Supabase Storage, inserts the generated post into `public.posts`, then continues to the next schedule/platform.
 
 Request:
 
 ```json
 {
-  "business_name": "GrowMino AI",
-  "industry": "AI content automation",
-  "offer": "AI-generated captions and visuals",
-  "target_audience": "Founders and small marketing teams",
-  "audience_pain_points": "Inconsistent posting and slow design workflows",
-  "tone": "Confident and practical",
-  "brand_personality": "Modern, sharp, reliable",
-  "cta_preference": "Book a demo",
-  "proof_assets": "Helps create weekly post batches",
-  "company_logo_url": "",
-  "week_start_date": "2026-08-24",
-  "weekly_goal": "Educate prospects and drive qualified conversations",
-  "theme": "AI social media automation",
-  "platforms": ["linkedin"],
-  "posts_count": 5
+  "business_id": "e450a91d-fb86-48de-a775-dab10b1749b7",
+  "week_start_date": "2026-09-09"
 }
 ```
 
@@ -230,25 +221,23 @@ Default response:
 {
   "plan_id": "8e7fa4f2-5ef2-4dc9-9ff4-41c40499739b",
   "status": "generated",
-  "week_start_date": "2026-08-24",
-  "weekly_goal": "Educate prospects and drive qualified conversations",
-  "theme": "AI social media automation",
-  "total_posts": 5,
+  "week_start_date": "2026-09-09",
+  "total_posts": 7,
   "posts": [
     {
       "position": 1,
       "post_id": "2ee39682-7460-4a65-b09f-4eaa5c3b0391",
-      "status": "completed",
+      "status": "generated",
       "platform": "linkedin",
       "day": "Monday",
       "content_type": "Educational",
-      "business_name": "GrowMino AI",
-      "topic": "How one brief becomes a week of content",
+      "topic": "How to choose versatile wardrobe basics",
       "caption": "Generated social media caption...",
-      "headline": "One Brief One Week of Content",
-      "image_url": "",
-      "image_base64": "...",
-      "image_data_url": "data:image/png;base64,...",
+      "headline": "Generated headline",
+      "image_url": "https://xxxxx.supabase.co/storage/v1/object/public/post-media/businesses/e450a91d-fb86-48de-a775-dab10b1749b7/posts/2ee39682-7460-4a65-b09f-4eaa5c3b0391/image-1.png",
+      "image_urls": [
+        "https://xxxxx.supabase.co/storage/v1/object/public/post-media/businesses/e450a91d-fb86-48de-a775-dab10b1749b7/posts/2ee39682-7460-4a65-b09f-4eaa5c3b0391/image-1.png"
+      ],
       "image_mime_type": "image/png",
       "alt_text": "A visual representing Educational content in the AI content automation industry.",
       "error": ""
@@ -257,15 +246,9 @@ Default response:
 }
 ```
 
-Generated images are returned per post as `posts[].image_base64` and `posts[].image_data_url`. `posts[].image_url` is empty because this API does not permanently store generated images.
+This endpoint never returns `image_base64` or `image_data_url`. Each returned image is already stored in Supabase Storage and saved in `public.posts.image_urls`.
 
-Internal debug response:
-
-```text
-POST /api/v1/content-plans?debug=true
-```
-
-Use `debug=true` only for backend/internal QA. It returns the older `items` shape with planning directions and `generated_*` fields.
+If one configured schedule/platform fails, the backend continues with the rest and returns `status: "partially_generated"` or `status: "failed"` with each failed post item containing an `error` value.
 
 ## Platform-Specific Publishing
 

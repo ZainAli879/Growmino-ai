@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import date
 from enum import Enum
 from uuid import UUID
 
@@ -101,53 +102,8 @@ class CreatePostRequest(BaseModel):
 
 
 class WeeklyContentPlanRequest(BaseModel):
-    business_name: str
-    industry: str
-    offer: str
-    target_audience: str
-    audience_pain_points: str
-    tone: str
-    brand_personality: str
-    cta_preference: str = ""
-    proof_assets: str = ""
-    company_logo_url: str = ""
-    week_start_date: str = ""
-    weekly_goal: str
-    theme: str
-    platforms: list[PlatformEnum] = Field(default_factory=lambda: [PlatformEnum.linkedin])
-    posts_count: int = Field(default=5, ge=1, le=7)
-
-    model_config = ConfigDict(str_strip_whitespace=True)
-
-    @field_validator("platforms", mode="before")
-    @classmethod
-    def normalize_platforms(cls, value: object) -> object:
-        if isinstance(value, str):
-            return [item.strip().lower() for item in value.split(",") if item.strip()]
-        if isinstance(value, list):
-            return [item.strip().lower() if isinstance(item, str) else item for item in value]
-        return value
-
-    @model_validator(mode="after")
-    def validate_weekly_plan_required(self) -> "WeeklyContentPlanRequest":
-        required_fields = [
-            "business_name",
-            "industry",
-            "offer",
-            "target_audience",
-            "audience_pain_points",
-            "tone",
-            "brand_personality",
-            "weekly_goal",
-            "theme",
-        ]
-        for field_name in required_fields:
-            value = getattr(self, field_name, "")
-            if not isinstance(value, str) or not value.strip():
-                raise ValueError(f"{field_name} is required and must be non-empty.")
-        if not self.platforms:
-            raise ValueError("platforms must include at least one platform.")
-        return self
+    business_id: UUID
+    week_start_date: date
 
 
 class ContentPlanItem(BaseModel):
@@ -184,18 +140,16 @@ class ContentPlanResponse(BaseModel):
 
 class PublicContentPlanPost(BaseModel):
     position: int
-    post_id: str = ""
+    post_id: UUID | None = None
     status: str
     platform: PlatformEnum
     day: DayEnum
     content_type: ContentTypeEnum
-    business_name: str
     topic: str
     caption: str = ""
     headline: str = ""
     image_url: str = ""
-    image_base64: str = ""
-    image_data_url: str = ""
+    image_urls: list[str] = Field(default_factory=list)
     image_mime_type: str = ""
     alt_text: str = ""
     error: str = ""
@@ -205,8 +159,6 @@ class PublicContentPlanResponse(BaseModel):
     plan_id: str
     status: str
     week_start_date: str = ""
-    weekly_goal: str
-    theme: str
     total_posts: int
     posts: list[PublicContentPlanPost]
 

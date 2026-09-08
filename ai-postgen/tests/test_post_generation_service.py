@@ -16,7 +16,7 @@ from app.auth import AuthContext  # noqa: E402
 from app.config import get_settings  # noqa: E402
 from app.database import BusinessGenerationContext  # noqa: E402
 from app.post_generation_service import PostGenerationService, PostGenerationServiceError  # noqa: E402
-from app.schemas import CreatePostRequest  # noqa: E402
+from app.schemas import CreatePostRequest, WeeklyContentPlanRequest  # noqa: E402
 from app.storage import StoredObject  # noqa: E402
 
 
@@ -42,6 +42,7 @@ class ImageResult:
 class FakeContextRepository:
     def __init__(self, context: BusinessGenerationContext | None) -> None:
         self.context = context
+        self.weekly_contexts = [context] if context else []
         self.business_exists_result = True
         self.schedule_business_id = context.business_id if context else uuid4()
 
@@ -53,6 +54,9 @@ class FakeContextRepository:
 
     def fetch_generation_context(self, *, business_id, weekly_schedule_id):
         return self.context
+
+    def fetch_weekly_generation_contexts(self, *, business_id):
+        return self.weekly_contexts
 
 
 class FakePostRepository:
@@ -223,6 +227,81 @@ class PostGenerationServiceTests(unittest.TestCase):
                 asyncio.run(self._service().create_post(self.payload, self.auth))
         self.assertEqual(len(self.storage.deleted), 1)
 
+    def test_weekly_content_plan_generates_each_configured_platform(self) -> None:
+        second_schedule_id = uuid4()
+        self.context_repo.weekly_contexts = [
+            _context(self.business_id, self.schedule_id, platforms=["instagram", "facebook"]),
+            _context(
+                self.business_id,
+                second_schedule_id,
+                platforms=["linkedin"],
+                day_of_week=2,
+                content_type="Pain-point",
+                weekly_topic="Avoiding outfit decision fatigue",
+            ),
+        ]
+        with (
+            patch("app.post_generation_service.generate_caption") as caption,
+            patch("app.post_generation_service.generate_image") as image,
+        ):
+            caption.return_value = CaptionResult(caption="Generated caption", headline="Generated Headline")
+            image.return_value = ImageResult(
+                model="gpt-image-2",
+                size="1024x1024",
+                style="caption_derived",
+                prompt_used="prompt",
+                negative_prompt_used="",
+                file_path="",
+                image_base64=base64.b64encode(b"image-bytes").decode("ascii"),
+                image_mime_type="image/png",
+                alt_text="Alt text",
+            )
+            response = asyncio.run(
+                self._service().create_content_plan(
+                    WeeklyContentPlanRequest(
+                        business_id=self.business_id,
+                        week_start_date="2026-09-09",
+                    ),
+                    self.auth,
+                    plan_id="plan-123",
+                )
+            )
+
+        self.assertEqual(response.status, "generated")
+        self.assertEqual(response.week_start_date, "2026-09-09")
+        self.assertEqual(response.total_posts, 3)
+        self.assertEqual([post.platform.value for post in response.posts], ["instagram", "facebook", "linkedin"])
+        self.assertEqual([post.day.value for post in response.posts], ["Monday", "Monday", "Tuesday"])
+        self.assertTrue(all(post.image_url.startswith("https://cdn.example.com/") for post in response.posts))
+        self.assertTrue(all(post.image_urls == [post.image_url] for post in response.posts))
+        self.assertEqual(len(self.post_repo.records), 3)
+        self.assertEqual(len(self.storage.uploaded_images), 3)
+
+    def test_weekly_content_plan_continues_when_one_generation_fails(self) -> None:
+        self.context_repo.weekly_contexts = [_context(self.business_id, self.schedule_id, platforms=["instagram"])]
+        with (
+            patch("app.post_generation_service.generate_caption") as caption,
+            patch("app.post_generation_service.generate_image") as image,
+        ):
+            caption.return_value = CaptionResult(caption="Generated caption", headline="Generated Headline")
+            image.side_effect = RuntimeError("image failed")
+            response = asyncio.run(
+                self._service().create_content_plan(
+                    WeeklyContentPlanRequest(
+                        business_id=self.business_id,
+                        week_start_date="2026-09-09",
+                    ),
+                    self.auth,
+                    plan_id="plan-123",
+                )
+            )
+
+        self.assertEqual(response.status, "failed")
+        self.assertEqual(response.posts[0].status, "failed")
+        self.assertEqual(response.posts[0].image_url, "")
+        self.assertEqual(response.posts[0].image_urls, [])
+        self.assertNotIn("base64", response.model_dump_json())
+
     def _service(self) -> PostGenerationService:
         return PostGenerationService(
             self.settings,
@@ -232,7 +311,15 @@ class PostGenerationServiceTests(unittest.TestCase):
         )
 
 
-def _context(business_id, schedule_id, platforms=None) -> BusinessGenerationContext:
+def _context(
+    business_id,
+    schedule_id,
+    platforms=None,
+    *,
+    day_of_week: int = 1,
+    content_type: str = "Educational Post",
+    weekly_topic: str = "Choosing versatile wardrobe basics",
+) -> BusinessGenerationContext:
     return BusinessGenerationContext(
         business_id=business_id,
         business_name="Velmora Fashion",
@@ -242,9 +329,9 @@ def _context(business_id, schedule_id, platforms=None) -> BusinessGenerationCont
         targeted_audience="Style-conscious men",
         targeted_location="",
         weekly_schedule_id=schedule_id,
-        day_of_week=1,
-        content_type="Educational Post",
-        weekly_topic="Choosing versatile wardrobe basics",
+        day_of_week=day_of_week,
+        content_type=content_type,
+        weekly_topic=weekly_topic,
         brand_personality="Elegant, helpful, modern",
         audience_pain_points="They struggle to match outfits confidently.",
         offer="",

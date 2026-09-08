@@ -154,25 +154,45 @@ class BusinessContextRepository:
         if row is None:
             return None
         return BusinessGenerationContext(
-            business_id=UUID(str(row["business_id"])),
-            business_name=_text(row.get("business_name")),
-            industry=_text(row.get("industry")),
-            description=_text(row.get("description")),
-            company_logo_url=_text(row.get("company_logo_url")),
-            targeted_audience=_text(row.get("targeted_audience")),
-            targeted_location=_text(row.get("targeted_location")),
-            weekly_schedule_id=UUID(str(row["weekly_schedule_id"])),
-            day_of_week=int(row.get("day_of_week") or 0),
-            content_type=_text(row.get("content_type")),
-            weekly_topic=_text(row.get("weekly_topic")),
-            brand_personality=_text(row.get("brand_personality")),
-            audience_pain_points=_text(row.get("audience_pain_points")),
-            offer=_text(row.get("offer")),
-            tone=_text(row.get("tone")),
-            proof_assets=_text(row.get("proof_assets")),
-            cta_preferences=_text(row.get("cta_preferences")),
-            platforms=_parse_platforms(row.get("platforms")),
+            **_generation_context_kwargs(row),
         )
+
+    def fetch_weekly_generation_contexts(self, *, business_id: UUID) -> list[BusinessGenerationContext]:
+        query = """
+            SELECT
+                b.id AS business_id,
+                b.business_name,
+                CONCAT(c.title, ' - ', sc.title) AS industry,
+                b.description,
+                b.logo AS company_logo_url,
+                bmp.targeted_audience,
+                bmp.targeted_location,
+                bws.id AS weekly_schedule_id,
+                bws.day_of_week,
+                bws.content_type,
+                bws.weekly_topic,
+                bws.brand_personality,
+                bws.pain_point AS audience_pain_points,
+                bws.offer,
+                bws.tone,
+                bws.proof_assets,
+                bws.cta_preferences,
+                bws.platforms
+            FROM businesses b
+            JOIN categories c
+                ON c.id = b.category_id
+            JOIN subcategories sc
+                ON sc.id = b.subcategory_id
+            LEFT JOIN business_marketing_profiles bmp
+                ON bmp.business_id = b.id
+            JOIN business_weekly_schedules bws
+                ON bws.business_id = b.id
+            WHERE b.id = %(business_id)s
+            ORDER BY bws.day_of_week ASC
+        """
+        with database_connection(self._settings) as conn:
+            rows = conn.execute(query, {"business_id": business_id}).fetchall()
+        return [BusinessGenerationContext(**_generation_context_kwargs(row)) for row in rows]
 
     def business_exists(self, *, business_id: UUID) -> bool:
         with database_connection(self._settings) as conn:
@@ -305,3 +325,26 @@ def _parse_platforms(value: object) -> list[str]:
 
 def _text(value: object) -> str:
     return str(value or "").strip()
+
+
+def _generation_context_kwargs(row: dict) -> dict:
+    return {
+        "business_id": UUID(str(row["business_id"])),
+        "business_name": _text(row.get("business_name")),
+        "industry": _text(row.get("industry")),
+        "description": _text(row.get("description")),
+        "company_logo_url": _text(row.get("company_logo_url")),
+        "targeted_audience": _text(row.get("targeted_audience")),
+        "targeted_location": _text(row.get("targeted_location")),
+        "weekly_schedule_id": UUID(str(row["weekly_schedule_id"])),
+        "day_of_week": int(row.get("day_of_week") or 0),
+        "content_type": _text(row.get("content_type")),
+        "weekly_topic": _text(row.get("weekly_topic")),
+        "brand_personality": _text(row.get("brand_personality")),
+        "audience_pain_points": _text(row.get("audience_pain_points")),
+        "offer": _text(row.get("offer")),
+        "tone": _text(row.get("tone")),
+        "proof_assets": _text(row.get("proof_assets")),
+        "cta_preferences": _text(row.get("cta_preferences")),
+        "platforms": _parse_platforms(row.get("platforms")),
+    }
