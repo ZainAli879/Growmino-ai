@@ -55,7 +55,11 @@ class ImagePromptStrategyTests(unittest.TestCase):
         self.assertIn("Final creative quality contract", prompt)
         self.assertIn("Clothes & Accessories - Men's Fashion", prompt)
         self.assertIn("Affordable premium everyday shirts and trousers", prompt)
-        self.assertIn("Avoid generic stock-photo scenes", prompt)
+        self.assertIn("generic stock-photo scenes", prompt)
+        self.assertIn("generic adjective-only slogans", prompt)
+        self.assertIn("finished 2026 social media creative/ad layout", prompt)
+        self.assertIn("6-16 total words", prompt)
+        self.assertIn("specific business benefit", prompt)
 
 
 if __name__ == "__main__":

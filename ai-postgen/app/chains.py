@@ -469,9 +469,12 @@ def _append_image_quality_contract(prompt: str, payload: GenerateRequest) -> str
         "Final creative quality contract:",
         f"- Make the visual unmistakably specific to {payload.industry} and the offer/topic: {business_focus}.",
         "- The product, service moment, customer outcome, or business transformation must be the main visual idea.",
-        "- Avoid generic stock-photo scenes, unrelated smiling groups, vague lifestyle imagery, and bland motivational poster design.",
+        "- Make this a finished 2026 social media creative/ad layout, not a raw photo with a small caption.",
+        "- Use a clear designed typography layer with 6-16 total words across the image, split into 1-3 polished lines.",
+        "- The text must express a specific business benefit, buyer pain, transformation, or campaign idea from the caption.",
+        "- Use bold readable hierarchy, modern editorial composition, refined spacing, layered depth, and tasteful graphic structure.",
+        "- Avoid tiny decorative text, generic adjective-only slogans, generic stock-photo scenes, unrelated smiling groups, vague lifestyle imagery, and bland motivational poster design.",
         "- If people appear, they must actively demonstrate the product, service, audience pain, or desired outcome.",
-        "- If overlay text appears, keep it to one or two short campaign-quality phrases derived from the caption, not generic adjectives.",
         "- Keep the image premium, platform-ready, mobile-readable, and commercially useful for a business trying to grow.",
     ]
     return f"{prompt.strip()}\n\n" + "\n".join(rules)

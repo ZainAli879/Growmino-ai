@@ -116,7 +116,7 @@ Headline quality rules:
 - Must be instantly readable in under 1 second.
 """.strip()
 
-NEGATIVE_IMAGE_PROMPT = "boring stock photo, generic corporate, generic smiling group, unrelated lifestyle scene, weak product focus, 2010s aesthetic, flat lighting, artificial CGI look, AI artifacts, plastic skin, cluttered UI, messy text, watermarks, signature, cheesy models, low resolution, bad anatomy, overused marketing templates"
+NEGATIVE_IMAGE_PROMPT = "boring stock photo, generic corporate, generic smiling group, raw unedited photo, plain product flat lay, unrelated lifestyle scene, weak product focus, tiny decorative text, generic adjective headline, 2010s aesthetic, flat lighting, artificial CGI look, AI artifacts, plastic skin, cluttered UI, messy text, watermarks, signature, cheesy models, low resolution, bad anatomy, overused marketing templates"
 
 IMAGE_PROMPT_FROM_CAPTION_TEMPLATE = """
 You are a senior creative director for social media ads and organic business content.
@@ -144,25 +144,28 @@ Prompt requirements:
 - Think first like a creative director, then return only the final production image prompt.
 - Infer the business category, what is being sold, the buyer's problem, the desired feeling, the promised transformation, and the strongest scroll-stopping visual angle.
 - The business category must be obvious within 1 second. Show the real service/product/outcome of this type of business, not a generic happy group or generic office scene.
-- Decide the strongest visual format for this specific post: realistic editorial scene, lifestyle photo, product hero, service outcome scene, before/after comparison, infographic, process/workflow map, symbolic metaphor, clean brand image, or hybrid photo-plus-graphic layout.
+- Decide the strongest finished social-media creative format for this specific post: bold campaign layout, editorial photo-plus-type design, product hero with benefit copy, service outcome scene with graphic callouts, before/after comparison, infographic, process/workflow map, symbolic metaphor, or hybrid photo-plus-graphic layout.
+- The final image should look like a polished 2026 social post/ad creative, not a raw camera photo with a small text label.
 - Do not create a poster from the generated headline. The headline belongs to the app UI, not the image prompt.
-- Let the caption and business context decide whether the image needs text at all.
-- Only include text when it genuinely improves comprehension or stopping power. If text is useful, create 1-2 natural, very short text elements from the caption's core idea; no paragraphs, no hashtags, no heavy CTA blocks, no made-up claims.
-- If text is used, make it campaign-quality and specific, not generic adjectives. Prefer a compact phrase based on the buyer problem, offer, transformation, or content type.
+- Include a clear designed typography layer for most business posts. Use one strong main message plus one short supporting phrase when helpful.
+- Text length target: 6-16 total words across the image, split into 1-3 clean lines. No paragraphs, no hashtags, no fake claims.
+- The text must be relevant to the actual caption, offer, audience pain, or transformation. Avoid generic adjective-only phrases like "Affordable, Stylish, Comfortable" unless supported by a sharper benefit.
+- If text is used, make it campaign-quality and specific. Prefer a compact phrase based on the buyer problem, offer, transformation, content type, or CTA.
 - Match the visual tone to the actual business category and audience. Fashion should show clothing, styling, fit, material, and desirability; real estate should show property/local aspiration; dental/healthcare should feel warm and trustworthy; SaaS should show practical business outcomes or polished productized workflows; restaurants should show food and dining atmosphere; fitness should show movement/results; service businesses should show human outcomes and credibility.
-- Product businesses must make the product or product experience the hero. Service businesses must make the result or service moment clear. Software/AI businesses must show the workflow/result without inventing fake UI brands or fake metrics.
+- Product businesses must make the product or product experience the hero, with visible details such as material, finish, use case, packaging, setting, or before/after value. Service businesses must make the result or service moment clear. Software/AI businesses must show the workflow/result without inventing fake UI brands or fake metrics.
 - If this is educational, tactical, automation, or process-driven content, an infographic, simple diagram, workflow map, before/after comparison, or annotated visual is allowed.
 - If this is founder authority, testimonial, or case-study content, prioritize realistic human/editorial imagery unless a compact proof-style graphic is clearly stronger.
 - If proof assets are missing, do not invent numbers, client names, testimonials, awards, charts, dashboards, or outcomes.
 - If proof assets exist, use them carefully as inspiration for the concept, without inventing extra proof.
 - The image MUST be highly relevant to the business, audience, platform, and caption. Avoid generic office stock imagery, generic friend groups, unrelated abstract scenes, and bland motivational poster layouts.
-- Include concrete visual direction: subject, setting, foreground/background, camera angle or graphic layout, lighting, color mood, focal hierarchy, and negative space.
+- Include concrete visual direction: subject, setting, foreground/background, camera angle or graphic layout, lighting, color mood, focal hierarchy, text placement, visual rhythm, and negative space.
 - {logo_instruction}
 - Business name is context only. Do not render the business name, app name, company wordmark, initials, icon, badge, or fake logo unless it is part of an exact externally provided logo instruction.
 - Do not add random UI text, fake app screens, fake metrics, fake client names, fake awards, watermarks, signatures, or unrelated labels.
-- Create an image that feels like premium, top-tier agency creative work, not a cheap stock photo or generic template.
-- Prefer powerful visual metaphors, realistic high-end lifestyle imagery, or clean business graphics that communicate the caption's value at a glance.
-- Emphasize rich textures, intentional styling, dynamic color grading, natural lighting, high-end commercial art direction, and platform-ready composition.
+- Create an image that feels like premium, top-tier agency creative work, not a cheap stock photo, plain catalog image, or generic template.
+- Prefer powerful visual metaphors, editorial/product imagery, bold typographic hierarchy, tasteful graphic overlays, clean business graphics, and commercial composition that communicate the caption's value at a glance.
+- Use modern 2026 design cues: bold readable typography, asymmetrical editorial layout, layered depth, tasteful gradients or material textures, clean modular panels, high contrast focal areas, refined spacing, and premium color grading.
+- Avoid old social post styling: thin tiny text, centered generic slogans, bland flat lay with empty space, basic poster layouts, and stock-photo-with-logo composition.
 - Keep composition balanced, readable on mobile, and free of clutter.
 - Use the platform context: LinkedIn can be more professional and insight-led, Instagram should be more visually aspirational and bold, Facebook should be clear and broadly accessible.
 - Internal quality gate before finalizing: if the prompt could be used unchanged by five unrelated businesses, rewrite it to include category-specific subjects, product/service details, and a sharper campaign concept.
