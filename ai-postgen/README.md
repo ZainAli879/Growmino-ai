@@ -26,6 +26,7 @@ This codebase intentionally does not include a frontend, Streamlit app, Google S
 ai-postgen/
   app/
     api.py
+    api_security.py
     auth.py
     chains.py
     config.py
@@ -51,7 +52,9 @@ ai-postgen/
   tests/
     test_api_security.py
     test_generation_response.py
+    test_image_prompt_strategy.py
     test_linkedin_multi_image.py
+    test_post_generation_service.py
     test_social_publishing_routes.py
   .env.example
   requirements.txt
@@ -179,11 +182,22 @@ LinkedIn-specific guide:
 docs/linkedin_personal_profile_integration.md
 ```
 
-Postman collection:
+Postman collections:
 
 ```text
 docs/GrowMino_LinkedIn_Personal_Profile_Postman_Collection.json
+docs/GrowMino_Social_Publishing_Postman_Collection.json
 ```
+
+## Authentication
+
+Production requests should use a signed GrowMino JWT:
+
+```text
+Authorization: Bearer <growmino-jwt>
+```
+
+The JWT must be signed with `GROWMINO_JWT_SECRET` and include the user/business context expected by `app/auth.py`. Development headers such as `X-Growmino-User-Id` and `X-Growmino-Business-Id` are only for local testing and must stay disabled in production with `ALLOW_DEV_AUTH_HEADERS=false`.
 
 ## API Routes
 
@@ -228,8 +242,50 @@ docs/GrowMino_LinkedIn_Personal_Profile_Postman_Collection.json
 - Content plan request body: `business_id`, `week_start_date`
 - Content plan responses return Supabase URLs only; they never return `image_base64` or `image_data_url`.
 - Image prompts are business-aware: the creative direction uses the business category, offer, audience pain, topic, CTA preference, proof assets, caption, platform, and logo mode before calling the image model.
+- `scripts/generate_weekly_content.py --once` generates the current week's configured posts for every active business and skips posts already generated for the same business/week/schedule/platform.
 - LinkedIn OAuth state, encrypted profile tokens, and scheduled LinkedIn jobs use `LINKEDIN_STORE_FILE` for backend runtime state.
 - For production, replace `app/linkedin_store.py` with the platform database implementation while keeping the same function contracts.
+
+## Weekly Automation
+
+Add the required `posts.week_start_date` column before enabling the timer:
+
+```sql
+ALTER TABLE posts
+ADD COLUMN IF NOT EXISTS week_start_date DATE;
+
+CREATE INDEX IF NOT EXISTS idx_posts_week_generation_lookup
+ON posts (
+    business_id,
+    weekly_schedule_id,
+    platform,
+    week_start_date
+);
+```
+
+Manual test:
+
+```bash
+cd /srv/growmino-ai-backend/app/ai-postgen
+/srv/growmino-ai-backend/venv/bin/python scripts/generate_weekly_content.py --once --dry-run
+/srv/growmino-ai-backend/venv/bin/python scripts/generate_weekly_content.py --once
+```
+
+Install and enable systemd:
+
+```bash
+sudo cp deploy/systemd/growmino-weekly-generator.service /etc/systemd/system/
+sudo cp deploy/systemd/growmino-weekly-generator.timer /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now growmino-weekly-generator.timer
+```
+
+Check schedule and logs:
+
+```bash
+systemctl list-timers growmino-weekly-generator.timer
+journalctl -u growmino-weekly-generator.service -f
+```
 
 ## Validation
 

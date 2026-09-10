@@ -1,0 +1,10 @@
+[Unit]
+Description=Run GrowMino weekly AI content generation every Monday at 00:00
+
+[Timer]
+OnCalendar=Mon *-*-* 00:00:00
+Persistent=true
+Unit=growmino-weekly-generator.service
+
+[Install]
+WantedBy=timers.target

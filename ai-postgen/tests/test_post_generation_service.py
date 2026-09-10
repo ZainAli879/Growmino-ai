@@ -63,11 +63,18 @@ class FakePostRepository:
     def __init__(self) -> None:
         self.records = []
         self.fail_insert = False
+        self.existing_keys = set()
+        self.exists_checks = []
 
     def insert_generated_post(self, record):
         if self.fail_insert:
             raise RuntimeError("insert failed")
         self.records.append(record)
+
+    def generated_post_exists(self, *, business_id, weekly_schedule_id, platform, week_start_date):
+        key = (str(business_id), str(weekly_schedule_id), platform, week_start_date)
+        self.exists_checks.append(key)
+        return key in self.existing_keys
 
 
 class FakeStorageService:
@@ -276,6 +283,34 @@ class PostGenerationServiceTests(unittest.TestCase):
         self.assertTrue(all(post.image_urls == [post.image_url] for post in response.posts))
         self.assertEqual(len(self.post_repo.records), 3)
         self.assertEqual(len(self.storage.uploaded_images), 3)
+        self.assertTrue(all(str(record.week_start_date) == "2026-09-09" for record in self.post_repo.records))
+
+    def test_weekly_content_plan_skips_existing_same_week_post(self) -> None:
+        self.context_repo.weekly_contexts = [_context(self.business_id, self.schedule_id, platforms=["instagram"])]
+        self.post_repo.existing_keys.add((str(self.business_id), str(self.schedule_id), "instagram", "2026-09-09"))
+        with (
+            patch("app.post_generation_service.generate_caption") as caption,
+            patch("app.post_generation_service.generate_image") as image,
+        ):
+            response = asyncio.run(
+                self._service().create_content_plan(
+                    WeeklyContentPlanRequest(
+                        business_id=self.business_id,
+                        week_start_date="2026-09-09",
+                    ),
+                    self.auth,
+                    plan_id="plan-123",
+                    skip_existing=True,
+                )
+            )
+
+        self.assertEqual(response.status, "skipped")
+        self.assertEqual(response.posts[0].status, "skipped")
+        self.assertEqual(response.posts[0].error, "Already generated for this week.")
+        caption.assert_not_called()
+        image.assert_not_called()
+        self.assertEqual(self.post_repo.records, [])
+        self.assertEqual(len(self.post_repo.exists_checks), 1)
 
     def test_weekly_content_plan_continues_when_one_generation_fails(self) -> None:
         self.context_repo.weekly_contexts = [_context(self.business_id, self.schedule_id, platforms=["instagram"])]

@@ -4,6 +4,7 @@ import asyncio
 import base64
 import json
 from dataclasses import dataclass
+from datetime import date
 from pathlib import Path
 from uuid import UUID, uuid4
 
@@ -107,20 +108,44 @@ class PostGenerationService:
         auth: AuthContext,
         *,
         plan_id: str,
+        skip_existing: bool = False,
     ) -> PublicContentPlanResponse:
         self._assert_business_authorized(payload.business_id, auth)
         contexts = await asyncio.to_thread(self._load_weekly_contexts, payload.business_id)
 
         posts: list[PublicContentPlanPost] = []
         position = 1
+        week_start_date = payload.week_start_date.isoformat()
         for context in contexts:
             platforms = [platform for platform in _supported_platforms(context.platforms)]
             for platform in platforms:
                 try:
+                    if skip_existing and await asyncio.to_thread(
+                        self._generated_post_exists,
+                        business_id=context.business_id,
+                        weekly_schedule_id=context.weekly_schedule_id,
+                        platform=platform,
+                        week_start_date=week_start_date,
+                    ):
+                        posts.append(
+                            PublicContentPlanPost(
+                                position=position,
+                                post_id=None,
+                                status="skipped",
+                                platform=platform,
+                                day=DAY_BY_NUMBER.get(context.day_of_week, DayEnum.monday),
+                                content_type=_safe_parse_content_type(context.content_type),
+                                topic=context.weekly_topic,
+                                error="Already generated for this week.",
+                            )
+                        )
+                        position += 1
+                        continue
                     generated = await self._create_post_from_context(
                         context=context,
                         platform=platform,
                         auth=auth,
+                        week_start_date=payload.week_start_date,
                     )
                     posts.append(
                         PublicContentPlanPost(
@@ -171,11 +196,22 @@ class PostGenerationService:
         if not posts:
             raise PostGenerationServiceError(422, "No supported platforms are configured for this business schedule.")
         successful = sum(1 for post in posts if post.status == "generated")
-        status = "generated" if successful == len(posts) else "partially_generated" if successful else "failed"
+        skipped = sum(1 for post in posts if post.status == "skipped")
+        failed = len(posts) - successful - skipped
+        if failed and successful:
+            status = "partially_generated"
+        elif failed and not successful and skipped:
+            status = "partially_failed"
+        elif failed:
+            status = "failed"
+        elif successful:
+            status = "generated" if not skipped else "partially_generated"
+        else:
+            status = "skipped"
         return PublicContentPlanResponse(
             plan_id=plan_id,
             status=status,
-            week_start_date=payload.week_start_date.isoformat(),
+            week_start_date=week_start_date,
             total_posts=len(posts),
             posts=posts,
         )
@@ -186,6 +222,7 @@ class PostGenerationService:
         context: BusinessGenerationContext,
         platform: PlatformEnum,
         auth: AuthContext,
+        week_start_date: date | None = None,
     ) -> PublicGenerateResponse:
         self._validate_context_for_platform(context, platform)
         ai_payload = await asyncio.to_thread(self._build_ai_payload, context, platform)
@@ -227,6 +264,7 @@ class PostGenerationService:
                 image_mime_type=image_result.image_mime_type,
                 alt_text=image_result.alt_text,
                 image_model=image_result.model,
+                week_start_date=week_start_date,
             )
         except Exception as exc:
             await asyncio.to_thread(
@@ -402,7 +440,17 @@ class PostGenerationService:
         image_mime_type: str,
         alt_text: str,
         image_model: str,
+        week_start_date: date | None,
     ) -> None:
+        prompt_meta = {
+            "provider": self._settings.image_provider,
+            "model": image_model,
+            "alt_text": alt_text,
+            "image_mime_type": image_mime_type,
+            "generation_version": "db-context-v1",
+        }
+        if week_start_date is not None:
+            prompt_meta["week_start_date"] = week_start_date.isoformat()
         try:
             self._post_repository.insert_generated_post(
                 PersistGeneratedPostInput(
@@ -423,17 +471,9 @@ class PostGenerationService:
                     weekly_focus_topics=context.weekly_topic,
                     brand_personality=context.brand_personality,
                     cta=context.cta_preferences,
-                    ai_prompt_meta_json=json.dumps(
-                        {
-                            "provider": self._settings.image_provider,
-                            "model": image_model,
-                            "alt_text": alt_text,
-                            "image_mime_type": image_mime_type,
-                            "generation_version": "db-context-v1",
-                        },
-                        ensure_ascii=True,
-                    ),
+                    ai_prompt_meta_json=json.dumps(prompt_meta, ensure_ascii=True),
                     created_by_user_id=_uuid_or_none(auth.user_id),
+                    week_start_date=week_start_date,
                 )
             )
         except DatabaseConfigurationError as exc:
@@ -449,6 +489,26 @@ class PostGenerationService:
             raise PostGenerationServiceError(401, "Authenticated business context is invalid.")
         if auth_business_id != business_id:
             raise PostGenerationServiceError(403, "Authenticated user is not authorized for this business.")
+
+    def _generated_post_exists(
+        self,
+        *,
+        business_id: UUID,
+        weekly_schedule_id: UUID,
+        platform: PlatformEnum,
+        week_start_date: str,
+    ) -> bool:
+        try:
+            return self._post_repository.generated_post_exists(
+                business_id=business_id,
+                weekly_schedule_id=weekly_schedule_id,
+                platform=platform.value,
+                week_start_date=week_start_date,
+            )
+        except DatabaseConfigurationError as exc:
+            raise PostGenerationServiceError(503, str(exc)) from exc
+        except DatabaseUnavailableError as exc:
+            raise PostGenerationServiceError(503, "Database is unavailable.") from exc
 
 
 def _parse_content_type(value: str) -> ContentTypeEnum:

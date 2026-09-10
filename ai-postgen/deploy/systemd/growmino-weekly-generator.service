@@ -1,0 +1,11 @@
+[Unit]
+Description=GrowMino weekly AI content generation
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/srv/growmino-ai-backend/app/ai-postgen
+EnvironmentFile=/srv/growmino-ai-backend/app/ai-postgen/.env
+ExecStart=/usr/bin/flock -n /tmp/growmino-weekly-generator.lock /srv/growmino-ai-backend/venv/bin/python /srv/growmino-ai-backend/app/ai-postgen/scripts/generate_weekly_content.py --once
+Nice=5
