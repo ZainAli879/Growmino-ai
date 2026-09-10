@@ -126,11 +126,19 @@ async def generate_for_all_active_businesses(
 
 def _log_post_result(*, business_id: str, post: PublicContentPlanPost) -> None:
     day = post.day.value if hasattr(post.day, "value") else str(post.day)
-    platform = post.platform.value if hasattr(post.platform, "value") else str(post.platform)
+    platform = post.platform.value if hasattr(post.platform, "value") else str(post.platform or "")
     if post.status == "generated":
         logger.info("GENERATED business_id=%s day=%s platform=%s post_id=%s", business_id, day, platform, post.post_id)
     elif post.status == "skipped":
-        logger.info("SKIPPED business_id=%s day=%s platform=%s reason=already_generated", business_id, day, platform)
+        if post.error == "incomplete_schedule":
+            logger.info(
+                "SKIPPED business_id=%s weekly_schedule_id=%s day=%s reason=incomplete_schedule",
+                business_id,
+                post.weekly_schedule_id,
+                day,
+            )
+        else:
+            logger.info("SKIPPED business_id=%s day=%s platform=%s reason=already_generated", business_id, day, platform)
     else:
         logger.error("FAILED business_id=%s day=%s platform=%s error=%s", business_id, day, platform, post.error)
 

@@ -241,6 +241,7 @@ The JWT must be signed with `GROWMINO_JWT_SECRET` and include the user/business 
 - `POST /api/v1/content-plans` uses the same generation/storage/persistence pipeline for every configured row in `business_weekly_schedules`.
 - Content plan request body: `business_id`, `week_start_date`
 - Content plan responses return Supabase URLs only; they never return `image_base64` or `image_data_url`.
+- Weekly automation skips incomplete schedule rows before any AI call when `content_type`, `weekly_topic`, or valid `platforms` are missing.
 - Image prompts are business-aware: the creative direction uses the business category, offer, audience pain, topic, CTA preference, proof assets, caption, platform, and logo mode before calling the image model.
 - `scripts/generate_weekly_content.py --once` generates the current week's configured posts for every active business and skips posts already generated for the same business/week/schedule/platform.
 - LinkedIn OAuth state, encrypted profile tokens, and scheduled LinkedIn jobs use `LINKEDIN_STORE_FILE` for backend runtime state.

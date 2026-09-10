@@ -118,6 +118,22 @@ class PostGenerationService:
         week_start_date = payload.week_start_date.isoformat()
         for context in contexts:
             platforms = [platform for platform in _supported_platforms(context.platforms)]
+            if _schedule_is_incomplete(context, platforms):
+                posts.append(
+                    PublicContentPlanPost(
+                        position=position,
+                        post_id=None,
+                        status="skipped",
+                        weekly_schedule_id=context.weekly_schedule_id,
+                        platform=None,
+                        day=DAY_BY_NUMBER.get(context.day_of_week, DayEnum.monday),
+                        content_type=_safe_parse_content_type(context.content_type),
+                        topic=context.weekly_topic,
+                        error="incomplete_schedule",
+                    )
+                )
+                position += 1
+                continue
             for platform in platforms:
                 try:
                     if skip_existing and await asyncio.to_thread(
@@ -132,6 +148,7 @@ class PostGenerationService:
                                 position=position,
                                 post_id=None,
                                 status="skipped",
+                                weekly_schedule_id=context.weekly_schedule_id,
                                 platform=platform,
                                 day=DAY_BY_NUMBER.get(context.day_of_week, DayEnum.monday),
                                 content_type=_safe_parse_content_type(context.content_type),
@@ -152,6 +169,7 @@ class PostGenerationService:
                             position=position,
                             post_id=generated.post_id,
                             status=generated.status,
+                            weekly_schedule_id=context.weekly_schedule_id,
                             platform=generated.platform,
                             day=generated.day,
                             content_type=generated.content_type,
@@ -171,6 +189,7 @@ class PostGenerationService:
                             position=position,
                             post_id=None,
                             status="failed",
+                            weekly_schedule_id=context.weekly_schedule_id,
                             platform=platform,
                             day=DAY_BY_NUMBER.get(context.day_of_week, DayEnum.monday),
                             content_type=_safe_parse_content_type(context.content_type),
@@ -184,6 +203,7 @@ class PostGenerationService:
                             position=position,
                             post_id=None,
                             status="failed",
+                            weekly_schedule_id=context.weekly_schedule_id,
                             platform=platform,
                             day=DAY_BY_NUMBER.get(context.day_of_week, DayEnum.monday),
                             content_type=_safe_parse_content_type(context.content_type),
@@ -537,6 +557,10 @@ def _supported_platforms(values: list[str]) -> list[PlatformEnum]:
         if platform not in supported:
             supported.append(platform)
     return supported
+
+
+def _schedule_is_incomplete(context: BusinessGenerationContext, supported_platforms: list[PlatformEnum]) -> bool:
+    return not context.content_type.strip() or not context.weekly_topic.strip() or not supported_platforms
 
 
 def _find_local_upload(logo_path: str, uploads_root: str) -> Path | None:

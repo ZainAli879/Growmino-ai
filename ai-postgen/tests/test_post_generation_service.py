@@ -312,6 +312,41 @@ class PostGenerationServiceTests(unittest.TestCase):
         self.assertEqual(self.post_repo.records, [])
         self.assertEqual(len(self.post_repo.exists_checks), 1)
 
+    def test_weekly_content_plan_skips_incomplete_schedule_before_ai_call(self) -> None:
+        self.context_repo.weekly_contexts = [
+            _context(
+                self.business_id,
+                self.schedule_id,
+                platforms=["instagram"],
+                weekly_topic="",
+            )
+        ]
+        with (
+            patch("app.post_generation_service.generate_caption") as caption,
+            patch("app.post_generation_service.generate_image") as image,
+        ):
+            response = asyncio.run(
+                self._service().create_content_plan(
+                    WeeklyContentPlanRequest(
+                        business_id=self.business_id,
+                        week_start_date="2026-09-09",
+                    ),
+                    self.auth,
+                    plan_id="plan-123",
+                    skip_existing=True,
+                )
+            )
+
+        self.assertEqual(response.status, "skipped")
+        self.assertEqual(response.posts[0].status, "skipped")
+        self.assertEqual(response.posts[0].weekly_schedule_id, self.schedule_id)
+        self.assertEqual(response.posts[0].error, "incomplete_schedule")
+        caption.assert_not_called()
+        image.assert_not_called()
+        self.assertEqual(self.storage.uploaded_images, [])
+        self.assertEqual(self.post_repo.records, [])
+        self.assertEqual(self.post_repo.exists_checks, [])
+
     def test_weekly_content_plan_continues_when_one_generation_fails(self) -> None:
         self.context_repo.weekly_contexts = [_context(self.business_id, self.schedule_id, platforms=["instagram"])]
         with (

@@ -297,56 +297,63 @@ class PostRepository:
         self._settings = settings
 
     def insert_generated_post(self, record: PersistGeneratedPostInput) -> None:
-        query = """
+        columns = [
+            "id",
+            "business_id",
+            "weekly_schedule_id",
+            "platform",
+            "title",
+            "description",
+            "hashtags",
+            "image_urls",
+            "status",
+            "content_type",
+            "day_of_week",
+            "tone",
+            "offer",
+            "target_audience",
+            "audience_pain_points",
+            "weekly_focus_topics",
+            "brand_personality",
+            "cta",
+            "source",
+            "ai_prompt_meta",
+            "is_active",
+            "created_by_user_id",
+        ]
+        values = [
+            "%(id)s",
+            "%(business_id)s",
+            "%(weekly_schedule_id)s",
+            "%(platform)s",
+            "%(title)s",
+            "%(description)s",
+            "%(hashtags)s",
+            "%(image_urls)s",
+            "'generated'",
+            "%(content_type)s",
+            "%(day_of_week)s",
+            "%(tone)s",
+            "%(offer)s",
+            "%(target_audience)s",
+            "%(audience_pain_points)s",
+            "%(weekly_focus_topics)s",
+            "%(brand_personality)s",
+            "%(cta)s",
+            "'ai'",
+            "%(ai_prompt_meta)s",
+            "true",
+            "%(created_by_user_id)s",
+        ]
+        if record.week_start_date is not None:
+            columns.insert(-2, "week_start_date")
+            values.insert(-2, "%(week_start_date)s")
+        query = f"""
             INSERT INTO posts (
-                id,
-                business_id,
-                weekly_schedule_id,
-                platform,
-                title,
-                description,
-                hashtags,
-                image_urls,
-                status,
-                content_type,
-                day_of_week,
-                tone,
-                offer,
-                target_audience,
-                audience_pain_points,
-                weekly_focus_topics,
-                brand_personality,
-                cta,
-                source,
-                ai_prompt_meta,
-                week_start_date,
-                is_active,
-                created_by_user_id
+                {", ".join(columns)}
             )
             VALUES (
-                %(id)s,
-                %(business_id)s,
-                %(weekly_schedule_id)s,
-                %(platform)s,
-                %(title)s,
-                %(description)s,
-                %(hashtags)s,
-                %(image_urls)s,
-                'generated',
-                %(content_type)s,
-                %(day_of_week)s,
-                %(tone)s,
-                %(offer)s,
-                %(target_audience)s,
-                %(audience_pain_points)s,
-                %(weekly_focus_topics)s,
-                %(brand_personality)s,
-                %(cta)s,
-                'ai',
-                %(ai_prompt_meta)s,
-                %(week_start_date)s,
-                true,
-                %(created_by_user_id)s
+                {", ".join(values)}
             )
         """
         params = {

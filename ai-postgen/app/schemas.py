@@ -142,7 +142,8 @@ class PublicContentPlanPost(BaseModel):
     position: int
     post_id: UUID | None = None
     status: str
-    platform: PlatformEnum
+    weekly_schedule_id: UUID | None = None
+    platform: PlatformEnum | None = None
     day: DayEnum
     content_type: ContentTypeEnum
     topic: str

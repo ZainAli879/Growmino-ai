@@ -61,6 +61,28 @@ class WeeklyContentGeneratorTests(unittest.TestCase):
         self.assertEqual(service.create_content_plan.call_count, 2)
         self.assertTrue(all(call.kwargs["skip_existing"] for call in service.create_content_plan.call_args_list))
 
+    def test_incomplete_schedule_skip_is_counted(self) -> None:
+        business_id = uuid4()
+        FakeBusinessRepository.business_ids = [business_id]
+        service = AsyncMock()
+        service.create_content_plan.return_value = _plan_response(business_id, generated=0, skipped=1, failed=0)
+
+        with (
+            patch("scripts.generate_weekly_content.get_settings"),
+            patch("scripts.generate_weekly_content.BusinessContextRepository", FakeBusinessRepository),
+            patch("scripts.generate_weekly_content.PostGenerationService", return_value=service),
+        ):
+            summary = asyncio.run(
+                generate_for_all_active_businesses(
+                    week_start_date=date(2026, 9, 7),
+                )
+            )
+
+        self.assertEqual(summary.businesses_total, 1)
+        self.assertEqual(summary.businesses_succeeded, 1)
+        self.assertEqual(summary.posts_generated, 0)
+        self.assertEqual(summary.posts_skipped, 1)
+
     def test_no_configured_schedules_is_safe_skip(self) -> None:
         business_id = uuid4()
         FakeBusinessRepository.business_ids = [business_id]
