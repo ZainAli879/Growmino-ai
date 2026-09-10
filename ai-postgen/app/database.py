@@ -151,18 +151,7 @@ class BusinessContextRepository:
                 b.description,
                 b.logo AS company_logo_url,
                 bmp.targeted_audience,
-                bmp.targeted_location,
-                bws.id AS weekly_schedule_id,
-                bws.day_of_week,
-                bws.content_type,
-                bws.weekly_topic,
-                bws.brand_personality,
-                bws.pain_point AS audience_pain_points,
-                bws.offer,
-                bws.tone,
-                bws.proof_assets,
-                bws.cta_preferences,
-                bws.platforms
+                bmp.targeted_location
             FROM businesses b
             JOIN categories c
                 ON c.id = b.category_id
@@ -202,18 +191,7 @@ class BusinessContextRepository:
                 b.description,
                 b.logo AS company_logo_url,
                 bmp.targeted_audience,
-                bmp.targeted_location,
-                bws.id AS weekly_schedule_id,
-                bws.day_of_week,
-                bws.content_type,
-                bws.weekly_topic,
-                bws.brand_personality,
-                bws.pain_point AS audience_pain_points,
-                bws.offer,
-                bws.tone,
-                bws.proof_assets,
-                bws.cta_preferences,
-                bws.platforms
+                bmp.targeted_location
             FROM businesses b
             JOIN categories c
                 ON c.id = b.category_id
