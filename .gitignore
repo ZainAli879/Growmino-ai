@@ -14,7 +14,12 @@ __pycache__/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
+.hypothesis/
+.tox/
+.nox/
 .coverage
+.coverage.*
+coverage.xml
 htmlcov/
 dist/
 build/
@@ -28,6 +33,8 @@ env/
 .env
 .env.*
 !.env.example
+.envrc
+*.local
 *.pem
 *.key
 *.crt
@@ -40,10 +47,25 @@ oauth-token*.json
 
 # Runtime outputs / generated assets
 outputs/
+runtime/
+tmp/
+temp/
+linkedin_store.json
+*linkedin_store*.json
+*.sqlite
+*.sqlite3
+*.db
 *.log
 *.tmp
 *.bak
 node_modules/
+.next/
+.nuxt/
+coverage/
+
+# Local-only backend testing helpers
+ai-postgen/app/static/test-ui.html
+ai-postgen/scripts/run_golden_smoke.py
 
 # Jupyter
 .ipynb_checkpoints/

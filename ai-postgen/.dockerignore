@@ -14,5 +14,3 @@ __pycache__
 outputs
 runtime
 *.log
-app/static/test-ui.html
-scripts/run_golden_smoke.py

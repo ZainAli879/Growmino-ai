@@ -4,14 +4,13 @@ import asyncio
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 import os
-from pathlib import Path
 from time import perf_counter
 from uuid import uuid4
 
 from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from openai import OpenAIError
 from starlette.exceptions import HTTPException as StarletteHTTPException
@@ -20,9 +19,7 @@ from app.api_security import ApiSecurityMiddleware, api_error_payload
 from app.auth import AuthContext, require_auth_context
 from app.config import Settings, get_settings
 from app.linkedin_api import router as linkedin_router
-from app.linkedin_client import build_authorization_url, create_state_token, oauth_expiry
 from app.linkedin_store import get_publish_job
-from app.linkedin_store import insert_oauth_state
 from app.openai_clients import generate_caption, generate_image
 from app.post_generation_service import PostGenerationService, PostGenerationServiceError
 from app.schemas import (
@@ -131,37 +128,6 @@ async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONR
             request_id=request_id,
         ),
     )
-
-
-@app.get("/test-ui", include_in_schema=False)
-async def test_ui() -> FileResponse:
-    if not _test_ui_enabled():
-        raise HTTPException(status_code=404, detail="Not Found")
-    return FileResponse(Path(__file__).resolve().parent / "static" / "test-ui.html")
-
-
-@app.get("/test-ui/linkedin/connect", include_in_schema=False)
-async def test_ui_linkedin_connect(
-    user_id: str = Query(default="local-user"),
-    business_id: str = Query(default="local-business"),
-) -> RedirectResponse:
-    if not _test_ui_enabled():
-        raise HTTPException(status_code=404, detail="Not Found")
-    try:
-        settings = get_settings()
-        state, state_hash = create_state_token()
-        await asyncio.to_thread(
-            insert_oauth_state,
-            settings,
-            state_hash=state_hash,
-            user_id=user_id.strip() or "local-user",
-            business_id=business_id.strip() or "local-business",
-            expires_at=oauth_expiry(settings),
-            redirect_after=settings.linkedin_frontend_success_url,
-        )
-        return RedirectResponse(build_authorization_url(settings, state))
-    except Exception:
-        return RedirectResponse("/test-ui?linkedin=error")
 
 
 @app.get("/api/v1/health")
@@ -449,13 +415,3 @@ def _validation_error_message(exc: RequestValidationError) -> str:
     if location:
         return f"{location}: {message}"
     return message
-
-
-def _test_ui_enabled() -> bool:
-    try:
-        return get_settings().expose_test_ui
-    except Exception:
-        explicit_value = os.getenv("EXPOSE_TEST_UI", "").strip().lower()
-        if explicit_value:
-            return explicit_value in {"1", "true", "yes", "on"}
-        return os.getenv("ENVIRONMENT", "development").strip().lower() != "production"

@@ -49,13 +49,15 @@ ai-postgen/
     linkedin_personal_profile_integration.md
     GrowMino_LinkedIn_Personal_Profile_Postman_Collection.json
     GrowMino_Social_Publishing_Postman_Collection.json
-  tests/
-    test_api_security.py
-    test_generation_response.py
-    test_image_prompt_strategy.py
-    test_linkedin_multi_image.py
-    test_post_generation_service.py
-    test_social_publishing_routes.py
+  scripts/
+    generate_weekly_content.py
+    process_linkedin_jobs.py
+  deploy/
+    systemd/
+      growmino-weekly-generator.service
+      growmino-weekly-generator.timer
+  Dockerfile
+  .dockerignore
   .env.example
   requirements.txt
 ```
@@ -63,7 +65,7 @@ ai-postgen/
 ## Setup
 
 ```powershell
-cd C:\Users\User\OneDrive\Desktop\GrowMino\Digital_Product\ai-postgen
+cd ai-postgen
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 pip install -r requirements.txt
@@ -71,6 +73,15 @@ copy .env.example .env
 ```
 
 Then edit `.env`.
+
+Local-only files are intentionally ignored by Git and should not be committed:
+
+- `.env`
+- `.venv/`
+- `outputs/`
+- runtime logs, caches, and generated images
+
+Share real credentials through the team's secret-management process, not through GitHub.
 
 ## Required Provider Variables
 
@@ -96,6 +107,8 @@ For LinkedIn:
 LINKEDIN_CLIENT_ID=
 LINKEDIN_CLIENT_SECRET=
 LINKEDIN_REDIRECT_URI=
+LINKEDIN_FRONTEND_SUCCESS_URL=
+LINKEDIN_FRONTEND_ERROR_URL=
 TOKEN_ENCRYPTION_KEY=
 ```
 
@@ -115,6 +128,13 @@ SUPABASE_POST_MEDIA_BUCKET=post-media
 SUPABASE_BUSINESS_ASSETS_BUCKET=business-assets
 ```
 
+If image generation should use a company logo reference, provide the logo outside Git or place it in a tracked asset location and set:
+
+```text
+DEFAULT_COMPANY_LOGO_PATH=
+LOGO_INPUT_MODE=overlay|reference|both
+```
+
 ## Run Backend
 
 ```powershell
@@ -127,7 +147,15 @@ OpenAPI docs:
 http://localhost:8000/docs
 ```
 
-Temporary local test UI files are ignored by Git and do not ship in the production deployment.
+This repository is backend-only. Configure frontend URLs in `.env` for OAuth redirects.
+
+For LinkedIn OAuth, `LINKEDIN_REDIRECT_URI` must point to this backend callback:
+
+```text
+https://your-api-domain.com/api/v1/integrations/linkedin/callback
+```
+
+`LINKEDIN_FRONTEND_SUCCESS_URL` and `LINKEDIN_FRONTEND_ERROR_URL` must point to frontend pages that handle the post-OAuth user experience.
 
 ## Docker
 
@@ -147,7 +175,6 @@ ALLOW_DEV_AUTH_HEADERS=false
 GROWMINO_JWT_SECRET=<at-least-32-characters>
 CORS_ALLOW_ORIGINS=https://your-frontend-domain.com
 PUBLIC_BASE_URL=https://your-api-domain.com
-EXPOSE_TEST_UI=false
 EXPOSE_API_DOCS=false
 EXPOSE_OUTPUTS=false
 API_RATE_LIMIT_ENABLED=true
@@ -288,9 +315,34 @@ systemctl list-timers growmino-weekly-generator.timer
 journalctl -u growmino-weekly-generator.service -f
 ```
 
+## LinkedIn Scheduled Worker
+
+Scheduled LinkedIn posts are claimed and published by `scripts/process_linkedin_jobs.py`. Run it as a worker process in production if LinkedIn scheduling is enabled:
+
+```bash
+python scripts/process_linkedin_jobs.py --interval 60 --limit 5
+```
+
+For a one-off run:
+
+```bash
+python scripts/process_linkedin_jobs.py --once
+```
+
+The current local implementation stores OAuth state, profile tokens, and scheduled LinkedIn jobs in `LINKEDIN_STORE_FILE`. For production, replace `app/linkedin_store.py` with the platform database implementation while preserving the same function contracts.
+
+## Handover Checklist
+
+- Rotate all credentials before sharing access with a new team.
+- Keep `.env`, `.venv/`, and `outputs/` out of GitHub.
+- Set production frontend origins in `CORS_ALLOW_ORIGINS`.
+- Set real LinkedIn frontend success/error URLs.
+- Confirm `DATABASE_URL` points to the `business-management` database.
+- Confirm Supabase buckets and service-role key are configured.
+- Run `python -m compileall app scripts` after deployment changes.
+
 ## Validation
 
 ```powershell
-python -m compileall app tests
-python -m unittest discover -s tests -v
+python -m compileall app scripts
 ```

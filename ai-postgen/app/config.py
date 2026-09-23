@@ -45,8 +45,8 @@ class Settings:
     linkedin_client_id: str = ""
     linkedin_client_secret: str = ""
     linkedin_redirect_uri: str = "http://localhost:8000/api/v1/integrations/linkedin/callback"
-    linkedin_frontend_success_url: str = "http://localhost:8000/test-ui?linkedin=connected"
-    linkedin_frontend_error_url: str = "http://localhost:8000/test-ui?linkedin=error"
+    linkedin_frontend_success_url: str = "https://app.example.com/integrations/linkedin/success"
+    linkedin_frontend_error_url: str = "https://app.example.com/integrations/linkedin/error"
     linkedin_oauth_state_ttl_seconds: int = 600
     token_encryption_key: str = ""
     linkedin_max_image_bytes: int = 5_000_000
@@ -57,7 +57,6 @@ class Settings:
     public_base_url: str = ""
     social_max_image_bytes: int = 10_000_000
     cors_allow_origins: tuple[str, ...] = ()
-    expose_test_ui: bool = True
     expose_api_docs: bool = True
     expose_outputs: bool = False
     api_max_body_bytes: int = 25_000_000
@@ -156,12 +155,12 @@ def get_settings() -> Settings:
         or "http://localhost:8000/api/v1/integrations/linkedin/callback"
     )
     linkedin_frontend_success_url = (
-        os.getenv("LINKEDIN_FRONTEND_SUCCESS_URL", "http://localhost:8000/test-ui?linkedin=connected").strip()
-        or "http://localhost:8000/test-ui?linkedin=connected"
+        os.getenv("LINKEDIN_FRONTEND_SUCCESS_URL", "https://app.example.com/integrations/linkedin/success").strip()
+        or "https://app.example.com/integrations/linkedin/success"
     )
     linkedin_frontend_error_url = (
-        os.getenv("LINKEDIN_FRONTEND_ERROR_URL", "http://localhost:8000/test-ui?linkedin=error").strip()
-        or "http://localhost:8000/test-ui?linkedin=error"
+        os.getenv("LINKEDIN_FRONTEND_ERROR_URL", "https://app.example.com/integrations/linkedin/error").strip()
+        or "https://app.example.com/integrations/linkedin/error"
     )
     linkedin_oauth_state_ttl_seconds = int(os.getenv("LINKEDIN_OAUTH_STATE_TTL_SECONDS", "600").strip() or "600")
     token_encryption_key = os.getenv("TOKEN_ENCRYPTION_KEY", "").strip()
@@ -172,12 +171,6 @@ def get_settings() -> Settings:
     linkedin_rest_version = os.getenv("LINKEDIN_REST_VERSION", "202608").strip() or "202608"
     public_base_url = os.getenv("PUBLIC_BASE_URL", "").strip().rstrip("/")
     social_max_image_bytes = int(os.getenv("SOCIAL_MAX_IMAGE_BYTES", "10000000").strip() or "10000000")
-    expose_test_ui_value = os.getenv("EXPOSE_TEST_UI", "").strip().lower()
-    expose_test_ui = (
-        expose_test_ui_value in {"1", "true", "yes", "on"}
-        if expose_test_ui_value
-        else environment != "production"
-    )
     expose_api_docs_value = os.getenv("EXPOSE_API_DOCS", "").strip().lower()
     expose_api_docs = (
         expose_api_docs_value in {"1", "true", "yes", "on"}
@@ -283,7 +276,6 @@ def get_settings() -> Settings:
         public_base_url=public_base_url,
         social_max_image_bytes=social_max_image_bytes,
         cors_allow_origins=cors_allow_origins,
-        expose_test_ui=expose_test_ui,
         expose_api_docs=expose_api_docs,
         expose_outputs=expose_outputs,
         api_max_body_bytes=api_max_body_bytes,

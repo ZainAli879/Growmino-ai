@@ -25,7 +25,6 @@ API_AUTH_REQUIRED=true
 ALLOW_DEV_AUTH_HEADERS=false
 GROWMINO_JWT_SECRET=<production-jwt-secret-or-replace-auth-dependency>
 CORS_ALLOW_ORIGINS=https://your-frontend-domain.com
-EXPOSE_TEST_UI=false
 EXPOSE_API_DOCS=false
 EXPOSE_OUTPUTS=false
 ```
@@ -95,7 +94,7 @@ API_PUBLISH_RATE_LIMIT_WINDOW_SECONDS=60
 SECURE_HSTS_ENABLED=true
 ```
 
-In production, `ENVIRONMENT=production` validates the required auth/CORS settings at startup. The temporary `/test-ui` page and API docs are hidden unless explicitly exposed, and `/outputs` cannot be publicly exposed.
+In production, `ENVIRONMENT=production` validates the required auth/CORS settings at startup. API docs are hidden unless explicitly exposed, and `/outputs` cannot be publicly exposed.
 
 ## Health
 
